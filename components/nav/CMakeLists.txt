@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS
+        "src/frames.cpp"
+        "src/ins.cpp"
+        "src/ekf.cpp"
+        "src/imm.cpp"
+        "src/fdir.cpp"
+        "src/health.cpp"
+        "src/adaptive.cpp"
+        "src/measurements.cpp"
+        "src/supervisor.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        esp_common
+        log
+)

@@ -1,0 +1,20 @@
+idf_component_register(
+    SRCS
+        "src/sd_logger.cpp"
+        "src/event_log.cpp"
+        "src/coredump_exporter.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        nav
+        driver
+        sdmmc
+        fatfs
+        nvs_flash
+        esp_common
+        log
+        esp_timer
+        freertos
+    PRIV_REQUIRES
+        esp_coredump
+)

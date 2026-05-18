@@ -1,0 +1,12 @@
+idf_component_register(
+    SRCS
+        "src/pid.cpp"
+        "src/motor_mixer.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        nav
+        driver
+        esp_common
+        log
+)

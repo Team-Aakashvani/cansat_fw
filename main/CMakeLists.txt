@@ -1,0 +1,35 @@
+idf_component_register(
+    SRCS 
+        "main.cpp" 
+        "main_gcs.cpp" 
+        "main_p4.cpp"
+        "system_init.cpp"
+    INCLUDE_DIRS "."
+    REQUIRES
+        nav
+        drivers
+        hal
+        control
+        telemetry
+        logging
+        comms
+        power
+        config_mgr
+        watchdog
+        bit
+        rf_mapping
+        p4_link
+        cli
+        freertos
+        esp_common
+        esp_hw_support
+        esp_system
+        esp_timer
+        nvs_flash
+        spi_flash
+        driver
+        sdmmc
+        fatfs
+        log
+        esp_wifi
+)

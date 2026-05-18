@@ -1,0 +1,13 @@
+idf_component_register(
+    SRCS
+        "src/power_manager.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        drivers
+        esp_common
+        log
+        freertos
+        esp_timer
+        driver
+)

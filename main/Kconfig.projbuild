@@ -1,0 +1,31 @@
+# CAN-7USAT 2026 — Build Target Configuration
+#
+# FILE:  main/Kconfig.projbuild
+
+menu "CAN-7USAT Build Target"
+
+    choice CANSAT_ROLE
+        prompt "Firmware Role"
+        default ROLE_FC
+        help
+            Select the hardware role for this build.
+
+        config ROLE_FC
+            bool "Flight Computer (ESP32-S3)"
+            help
+                Primary flight software including navigation, control, 
+                sensor fusion, and RF mapping mission.
+
+        config ROLE_GCS
+            bool "Ground Station (ESP32-S3)"
+            help
+                Minimal firmware bridging LoRa radio packets to/from USB serial.
+
+        config ROLE_P4
+            bool "Media Coprocessor (ESP32-P4)"
+            help
+                Camera processing module with H.264 encoding and local SD storage.
+
+    endchoice
+
+endmenu

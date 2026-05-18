@@ -1,0 +1,39 @@
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+*.aps
+*.ncb
+*.opendb
+*.opt
+*.plg
+*.pch
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*.bak
+
+# Logs
+*.log
+
+# Dependency lock files (ESP-IDF component manager)
+dependencies.lock
+managed_components/
+
+# Eclipse
+.cproject
+.project
+.settings/

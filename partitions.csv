@@ -1,0 +1,13 @@
+# ===========================================================================
+# partitions.csv — Custom partition table for CAN-7USAT flight software
+# Flash: 8MB total
+# ===========================================================================
+# Name,        Type, SubType,  Offset,   Size,    Flags
+nvs,           data, nvs,      0x9000,   0x6000,         # NVS: calibration + config (24KB)
+otadata,       data, ota,      0xf000,   0x2000,         # OTA data (8KB)
+phy_init,      data, phy,      0x11000,  0x1000,         # PHY init data (4KB)
+factory,       app,  factory,  0x20000,  0x300000,       # Factory app (3MB)
+ota_0,         app,  ota_0,    0x320000, 0x300000,       # OTA slot 0 (3MB)
+config_store,  data, nvs,      0x620000, 0x10000,        # Extended config NVS (64KB)
+event_log,     data, fat,      0x630000, 0x100000,       # Event log partition (1MB FAT)
+coredump,      data, coredump, 0x730000, 0x50000,        # Core dump (320KB)

@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS
+        "src/built_in_test.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        nav
+        drivers
+        comms
+        logging
+        control
+        power
+        config_mgr
+        esp_common
+        log
+        freertos
+)

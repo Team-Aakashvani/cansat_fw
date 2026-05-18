@@ -1,0 +1,12 @@
+idf_component_register(
+    SRCS
+        "src/watchdog.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        freertos
+        esp_common
+        log
+        driver
+        esp_timer
+)

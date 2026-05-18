@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS
+        "src/nvs_config.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        nav
+        nvs_flash
+        esp_common
+        log
+)

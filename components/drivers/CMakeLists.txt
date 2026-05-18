@@ -1,0 +1,22 @@
+idf_component_register(
+    SRCS
+        "src/bno085.cpp"
+        "src/bmp585.cpp"
+        "src/ngps01.cpp"
+        "src/sx1278.cpp"
+        "src/sdp31.cpp"
+        "src/sgp41.cpp"
+        "src/sht4x.cpp"
+        "src/ina260.cpp"
+        "src/max17048.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        hal
+        nav
+        driver
+        esp_common
+        log
+        freertos
+        esp_timer
+)
