@@ -44,6 +44,7 @@ public:
     float    get_ground_alt_m()   const noexcept;
     float    get_baro_offset_pa() const noexcept;
     uint32_t get_boot_count()     const noexcept;
+    bool     get_bit_override()   const noexcept;
     void     get_mag_cal(float out[3]) const noexcept;
 
     // ----- Setters -----------------------------------------------------------
@@ -51,6 +52,7 @@ public:
     esp_err_t set_team_id       (uint16_t id)         noexcept;
     esp_err_t set_ground_alt_m  (float alt_m)         noexcept;
     esp_err_t set_baro_offset_pa(float offset_pa)     noexcept;
+    esp_err_t set_bit_override  (bool enable)         noexcept;
     esp_err_t set_mag_cal       (const float cal[3])  noexcept;
 
     /// Increment and persist boot counter. Call once at startup after init().

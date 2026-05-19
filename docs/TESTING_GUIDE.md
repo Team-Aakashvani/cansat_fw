@@ -46,6 +46,25 @@ To identify which sensor failed, read the serial output lines before the halt.
 
 ---
 
+## Stage 1.5 — Development Testing (Bypassing BIT)
+
+If you are testing software on a bare ESP32 without the CanSat PCB or sensors, the system will normally halt. You can bypass this in two ways:
+
+### A. Persistent Bypass (CLI)
+1. Boot the ESP32 and wait for the BIT failure.
+2. The CLI remains active. Type: `set bit_override 1` followed by `reboot`.
+3. The system will now log failures but proceed to spawn all flight tasks.
+
+### B. Compile-Time Bypass (Kconfig)
+1. Run `idf.py menuconfig`.
+2. Navigate to `CAN-7USAT Build Target`.
+3. Enable `Bypass BIT Critical Failure Halt`.
+4. Rebuild and flash.
+
+**Warning:** Never fly with an active BIT override. This is for software development ONLY.
+
+---
+
 ## Stage 2 — Bench Test
 
 ### 2.0 USB CLI & Maintenance Mode

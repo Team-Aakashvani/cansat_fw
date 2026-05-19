@@ -79,6 +79,16 @@ uint32_t NVSConfig::get_boot_count() const noexcept {
     return val;
 }
 
+bool NVSConfig::get_bit_override() const noexcept {
+    nvs_handle_t nvs;
+    uint8_t val = 0;
+    if (open_ro(nvs) == ESP_OK) {
+        nvs_get_u8(nvs, "bit_ovr", &val);
+        nvs_close(nvs);
+    }
+    return (val != 0);
+}
+
 void NVSConfig::get_mag_cal(float out[3]) const noexcept {
     out[0] = out[1] = out[2] = 0.0f;
     nvs_handle_t nvs;
@@ -125,6 +135,17 @@ esp_err_t NVSConfig::set_baro_offset_pa(float offset_pa) noexcept {
     ret = nvs_set_u32(nvs, "baro_off", raw);
     if (ret == ESP_OK) ret = nvs_commit(nvs);
     nvs_close(nvs);
+    return ret;
+}
+
+esp_err_t NVSConfig::set_bit_override(bool enable) noexcept {
+    nvs_handle_t nvs;
+    esp_err_t ret = open_rw(nvs);
+    if (ret != ESP_OK) return ret;
+    ret = nvs_set_u8(nvs, "bit_ovr", (uint8_t)(enable ? 1 : 0));
+    if (ret == ESP_OK) ret = nvs_commit(nvs);
+    nvs_close(nvs);
+    ESP_LOGI(TAG, "bit_override set to %s", enable ? "TRUE" : "FALSE");
     return ret;
 }
 

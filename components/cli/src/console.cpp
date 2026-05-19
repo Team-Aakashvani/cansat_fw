@@ -65,6 +65,7 @@ void Console::process_line(char* line) noexcept {
         printf("Team ID: %u\n", nvs_.get_team_id());
         printf("Boot Count: %lu\n", (unsigned long)nvs_.get_boot_count());
         printf("Ground Alt: %.2f m\n", (double)nvs_.get_ground_alt_m());
+        printf("BIT Override: %s\n", nvs_.get_bit_override() ? "ENABLED" : "disabled");
     } else {
         printf("Unknown command: %s. Type 'help'.\n", argv[0]);
     }
@@ -78,7 +79,7 @@ void Console::print_help() noexcept {
     printf("  set <key> <val...>  - Set NVS config value (use 3 vals for mag_cal)\n");
     printf("  dispatch <raw_cmd>  - Inject a LoRa-style command\n");
     printf("  reboot              - Restart the ESP32\n");
-    printf("\nNVS Keys: team_id, ground_alt, baro_offset, mag_cal\n");
+    printf("\nNVS Keys: team_id, ground_alt, baro_offset, bit_override, mag_cal\n");
 }
 
 void Console::handle_get(int argc, char** argv) noexcept {
@@ -93,6 +94,8 @@ void Console::handle_get(int argc, char** argv) noexcept {
         printf("ground_alt = %.2f\n", (double)nvs_.get_ground_alt_m());
     } else if (strcmp(argv[1], "baro_offset") == 0) {
         printf("baro_offset = %.2f\n", (double)nvs_.get_baro_offset_pa());
+    } else if (strcmp(argv[1], "bit_override") == 0) {
+        printf("bit_override = %d\n", nvs_.get_bit_override());
     } else if (strcmp(argv[1], "mag_cal") == 0) {
         float cal[3];
         nvs_.get_mag_cal(cal);
@@ -120,6 +123,10 @@ void Console::handle_set(int argc, char** argv) noexcept {
         float val = (float)atof(argv[2]);
         nvs_.set_baro_offset_pa(val);
         printf("Set baro_offset = %.2f\n", (double)val);
+    } else if (strcmp(argv[1], "bit_override") == 0) {
+        bool val = (atoi(argv[2]) != 0);
+        nvs_.set_bit_override(val);
+        printf("Set bit_override = %d\n", val);
     } else if (strcmp(argv[1], "mag_cal") == 0) {
         if (argc < 5) {
             printf("Usage: set mag_cal <x> <y> <z>\n");

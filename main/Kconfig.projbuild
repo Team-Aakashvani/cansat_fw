@@ -28,4 +28,11 @@ menu "CAN-7USAT Build Target"
 
     endchoice
 
+    config BIT_DEBUG_BYPASS
+        bool "Bypass BIT Critical Failure Halt"
+        default n
+        help
+            If enabled, the system will log BIT failures but will NOT halt.
+            This is useful for testing software on an ESP32 without all sensors connected.
+
 endmenu

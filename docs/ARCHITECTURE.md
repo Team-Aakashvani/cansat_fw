@@ -294,7 +294,9 @@ app_main()
      │
      ├─ [7] BIT — 10 checks
      │    PASS → xEventGroupSetBits(EVT_BIT_PASS)
-     │    FAIL → LED blink loop (infinite halt)
+     │    FAIL → Check Overrides (Kconfig or NVS bit_override)
+     │           Override Active → Proceed with warnings
+     │           No Override → LED blink loop (infinite halt)
      │
      ├─ [8] FlightComputer init (zero-state EKF, IMM, supervisor)
      │

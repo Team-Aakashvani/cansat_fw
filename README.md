@@ -273,8 +273,10 @@ The firmware includes a built-in Command Line Interface accessible via the prima
 ### Configuration (`get` / `set`)
 Change persistent parameters stored in NVS:
 - `get <key>` / `set <key> <val>`
-- Examples: `set team_id 1234`, `set mag_cal 0.12 -0.05 0.33`
-- Keys: `team_id`, `ground_alt`, `baro_offset`, `mag_cal`
+- Examples: `set team_id 1234`, `set mag_cal 0.12 -0.05 0.33`, `set bit_override 1`
+- Keys: `team_id`, `ground_alt`, `baro_offset`, `bit_override`, `mag_cal`
+
+> **Developer Tip:** If you are testing on an ESP32 without sensors connected, you can bypass the BIT halt by enabling `BIT_DEBUG_BYPASS` in `menuconfig` or running `set bit_override 1` in the CLI.
 
 ### Command Injection (`dispatch`)
 Inject any LoRa-style command. **Note:** Use commas for arguments, no spaces.

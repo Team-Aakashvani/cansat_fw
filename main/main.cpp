@@ -851,14 +851,29 @@ extern "C" void main_fc() {
                         bit_res.pass() ? "BIT pass" : "BIT FAIL");
 
     if (!bit_res.pass()) {
-        ESP_LOGE(TAG, "CRITICAL BIT FAILURE (0x%08X) — halting",
-                 (unsigned)bit_res.flags);
-        gpio_set_direction((gpio_num_t)nav::PINS.led_status, GPIO_MODE_OUTPUT);
-        while (true) {
-            gpio_set_level((gpio_num_t)nav::PINS.led_status, 1);
-            vTaskDelay(pdMS_TO_TICKS(100));
-            gpio_set_level((gpio_num_t)nav::PINS.led_status, 0);
-            vTaskDelay(pdMS_TO_TICKS(100));
+        ESP_LOGE(TAG, "CRITICAL BIT FAILURE (0x%08X)", (unsigned)bit_res.flags);
+        
+        bool bypass = false;
+#if defined(CONFIG_BIT_DEBUG_BYPASS)
+        bypass = true;
+        ESP_LOGW(TAG, "BIT halt bypassed by Kconfig (CONFIG_BIT_DEBUG_BYPASS)");
+#endif
+        if (nvs_cfg.get_bit_override()) {
+            bypass = true;
+            ESP_LOGW(TAG, "BIT halt bypassed by NVS override flag");
+        }
+
+        if (!bypass) {
+            ESP_LOGE(TAG, "System Halted.");
+            gpio_set_direction((gpio_num_t)nav::PINS.led_status, GPIO_MODE_OUTPUT);
+            while (true) {
+                gpio_set_level((gpio_num_t)nav::PINS.led_status, 1);
+                vTaskDelay(pdMS_TO_TICKS(100));
+                gpio_set_level((gpio_num_t)nav::PINS.led_status, 0);
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+        } else {
+            ESP_LOGW(TAG, "Proceeding to flight despite BIT failures...");
         }
     }
     xEventGroupSetBits(evt_group, EVT_BIT_PASS);
