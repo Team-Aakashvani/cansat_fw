@@ -58,6 +58,13 @@ struct TelemetryFrame {
     uint8_t  software_state;       ///< 0–7
     uint32_t packet_count;
     uint32_t mission_time_s;       ///< Seconds elapsed since BOOST latch
+
+    // Extended Mission Data (RF Mapping + P4 Camera)
+    float    cc1101_freq_mhz;
+    int16_t  cc1101_rssi_dbm;
+    uint8_t  p4_recording;
+    float    p4_sd_gb;
+    uint8_t  p4_fps;
 };
 
 class TelemetryEncoder {
@@ -83,6 +90,8 @@ public:
         const drivers::GNSSData&         gnss,
         const drivers::IMUData&          imu,
         const drivers::PowerData&        pwr,
+        const p4_link::P4Status&         p4,
+        uint32_t freq_hz, int8_t rssi,
         uint32_t packet_count,
         uint32_t mission_time_s) noexcept;
 

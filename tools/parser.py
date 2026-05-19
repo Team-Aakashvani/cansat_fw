@@ -52,13 +52,13 @@ log = logging.getLogger("gcs_parser")
 
 
 # =============================================================================
-# FIELD DEFINITIONS — the 16 data fields in every telemetry line
+# FIELD DEFINITIONS — the 21 data fields in every telemetry line
 # =============================================================================
 #
-# Following CAN-7USAT 2026 §5.3 (Telemetry Data Format)
+# Following CAN-7USAT 2026 §5.3 (Telemetry Data Format) + Extended Mission
 #
 # Each telemetry line from the CanSat looks like:
-#   1234,00:04:32,272,587.34,94312.5,18.3,7.41,07:15:44,12.971600,77.594600,912.30,8,0.12,-0.04,1.23,3
+#   1234,00:04:32,272,587.34,94312.5,18.3,7.41,07:15:44,12.971600,77.594600,912.30,8,0.12,-0.04,1.23,3,433.5,-85,1,3.5,25
 #
 
 FIELDS = [
@@ -78,6 +78,11 @@ FIELDS = [
     ("tilt_y",          float),   # 13 — Tilt angle Y axis
     ("rot_z",           float),   # 14 — Rotation around Z axis (spin rate)
     ("software_state",  int),     # 15 — Which flight phase (0=preflight, 3=parachute, etc.)
+    ("cc1101_freq_mhz", float),   # 16 — RF scanner current frequency in MHz
+    ("cc1101_rssi_dbm", int),     # 17 — RF scanner signal strength (negative = weaker)
+    ("p4_recording",    int),     # 18 — Is the camera recording? (0=no, 1=yes)
+    ("p4_sd_gb",        float),   # 19 — Free space on camera SD card in GB
+    ("p4_fps",          int),     # 20 — Camera frames per second
 ]
 
 EXPECTED_FIELD_COUNT = len(FIELDS)

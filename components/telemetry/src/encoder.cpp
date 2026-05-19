@@ -24,11 +24,13 @@ int TelemetryEncoder::encode(const TelemetryFrame& f,
     // CAN-7USAT CSV format (fields after TEAM_ID):
     // MISSION_TIME,PACKET_COUNT,ALTITUDE,PRESSURE,TEMPERATURE,
     // VOLTAGE,GNSS_TIME,LATITUDE,LONGITUDE,GNSS_ALT,SATS,
-    // TILT_X,TILT_Y,ROT_Z,SOFTWARE_STATE
+    // TILT_X,TILT_Y,ROT_Z,SOFTWARE_STATE,
+    // CC1101_FREQ,CC1101_RSSI,P4_REC,P4_SD,P4_FPS
     int n = snprintf(out, out_len,
-        "%s,%u,%.2f,%.1f,%.1f,%.2f,"    // 6 fields (starting with mission_time)
+        "%s,%u,%.2f,%.1f,%.1f,%.2f,"    // 6 fields
         "%s,%.6f,%.6f,%.2f,%d,"          // 5 fields
-        "%.2f,%.2f,%.2f,%u",             // 4 fields (no \n)
+        "%.2f,%.2f,%.2f,%u,"             // 4 fields
+        "%.1f,%d,%u,%.2f,%u",            // 5 extended fields
         mission_time,
         (unsigned)f.packet_count,
         (double)f.altitude_m,
@@ -43,7 +45,12 @@ int TelemetryEncoder::encode(const TelemetryFrame& f,
         (double)f.accel_x_mps2,
         (double)f.accel_y_mps2,
         (double)f.gyro_z_dps,
-        (unsigned)f.software_state
+        (unsigned)f.software_state,
+        (double)f.cc1101_freq_mhz,
+        (int)f.cc1101_rssi_dbm,
+        (unsigned)f.p4_recording,
+        (double)f.p4_sd_gb,
+        (unsigned)f.p4_fps
     );
 
     if (n < 0 || (size_t)n >= out_len) {
@@ -59,6 +66,8 @@ TelemetryFrame TelemetryEncoder::make_frame(
         const drivers::GNSSData&         gnss,
         const drivers::IMUData&          imu,
         const drivers::PowerData&        pwr,
+        const p4_link::P4Status&         p4,
+        uint32_t freq_hz, int8_t rssi,
         uint32_t packet_count,
         uint32_t mission_time_s) noexcept {
 
@@ -98,6 +107,13 @@ TelemetryFrame TelemetryEncoder::make_frame(
         f.accel_y_mps2 = (float)(ea.roll_rad  * 180.0 / nav::PI);
         f.gyro_z_dps   = 0.0f;
     }
+
+    // Extended Mission
+    f.cc1101_freq_mhz = (float)freq_hz / 1.0e6f;
+    f.cc1101_rssi_dbm = rssi;
+    f.p4_recording    = p4.recording ? 1 : 0;
+    f.p4_sd_gb        = p4.sd_free_gb;
+    f.p4_fps          = p4.fps;
 
     return f;
 }

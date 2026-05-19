@@ -479,6 +479,7 @@ static void telem_task(void* /*arg*/) {
         drivers::IMUData   imu_snap{};
         drivers::PowerData pwr_snap{};
         nav::FlightComputerOutput fc_snap{};
+        p4_link::P4Status p4_snap{};
 
         {
             xSemaphoreTake(sensor_mutex, portMAX_DELAY);
@@ -493,6 +494,7 @@ static void telem_task(void* /*arg*/) {
             fc_snap = fc.last_output;
             xSemaphoreGive(fc_mutex);
         }
+        p4_snap = p4_link_drv.get_status();
 
         // Build and encode frame
         const uint32_t pkt_cnt = ++packet_count;
@@ -501,6 +503,7 @@ static void telem_task(void* /*arg*/) {
         telemetry::TelemetryFrame frame =
             telemetry::TelemetryEncoder::make_frame(
                 fc_snap, baro_snap, gnss_snap, imu_snap, pwr_snap,
+                p4_snap, scan_drv.get_frequency(), scan_drv.read_rssi_dbm(),
                 pkt_cnt, mt_s);
 
         int n = telem_enc.encode(frame, csv_buf, sizeof(csv_buf));
