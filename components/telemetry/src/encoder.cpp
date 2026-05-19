@@ -21,15 +21,14 @@ int TelemetryEncoder::encode(const TelemetryFrame& f,
     char mission_time[12];
     format_mission_time(f.mission_time_s, mission_time, sizeof(mission_time));
 
-    // CAN-7USAT CSV format:
-    // TEAM_ID,MISSION_TIME,PACKET_COUNT,ALTITUDE,PRESSURE,TEMPERATURE,
+    // CAN-7USAT CSV format (fields after TEAM_ID):
+    // MISSION_TIME,PACKET_COUNT,ALTITUDE,PRESSURE,TEMPERATURE,
     // VOLTAGE,GNSS_TIME,LATITUDE,LONGITUDE,GNSS_ALT,SATS,
     // TILT_X,TILT_Y,ROT_Z,SOFTWARE_STATE
     int n = snprintf(out, out_len,
-        "%u,%s,%u,%.2f,%.1f,%.1f,%.2f,"    // 7 fields
-        "%s,%.6f,%.6f,%.2f,%d,"             // 5 fields
-        "%.2f,%.2f,%.2f,%u\n",              // 4 fields
-        (unsigned)nav::TELEM_CFG.team_id,
+        "%s,%u,%.2f,%.1f,%.1f,%.2f,"    // 6 fields (starting with mission_time)
+        "%s,%.6f,%.6f,%.2f,%d,"          // 5 fields
+        "%.2f,%.2f,%.2f,%u",             // 4 fields (no \n)
         mission_time,
         (unsigned)f.packet_count,
         (double)f.altitude_m,

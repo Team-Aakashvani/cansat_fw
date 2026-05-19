@@ -66,8 +66,14 @@ public:
 
     TelemetryEncoder() noexcept = default;
 
-    /// Build CSV telemetry string from a TelemetryFrame.
-    /// Returns length written (excluding null terminator).
+    /**
+     * @brief Build CSV telemetry fields from a TelemetryFrame.
+     * 
+     * NOTE: This produces the CSV string starting from MISSION_TIME. 
+     * The TEAM_ID is prepended by the LoRa link layer.
+     * 
+     * Returns length written (excluding null terminator).
+     */
     int encode(const TelemetryFrame& frame, char* out, size_t out_len) const noexcept;
 
     /// Convenience: build frame from FlightComputer output + latest sensor data.

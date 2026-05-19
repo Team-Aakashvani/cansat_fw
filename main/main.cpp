@@ -505,8 +505,14 @@ static void telem_task(void* /*arg*/) {
 
         int n = telem_enc.encode(frame, csv_buf, sizeof(csv_buf));
         if (n > 0) {
+            // 1. Send via LoRa (LoRaLink will prepend TEAM_ID and append CRC+\n)
             lora.enqueue_packet(csv_buf, (size_t)n);
-            sd_logger.write_line(csv_buf);
+
+            // 2. Log to SD (Must include TEAM_ID and \n for compliance)
+            char sd_buf[telemetry::TelemetryEncoder::BUF_LEN + 16];
+            int sn = snprintf(sd_buf, sizeof(sd_buf), "%u,%s\n", 
+                              (unsigned)nav::TELEM_CFG.team_id, csv_buf);
+            if (sn > 0) sd_logger.write_line(sd_buf);
 
             // Brief debug log (first field only for rate check)
             ESP_LOGD(TAG, "TELEM[%lu] %d bytes", (unsigned long)pkt_cnt, n);
