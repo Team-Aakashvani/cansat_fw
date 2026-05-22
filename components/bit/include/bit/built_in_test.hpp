@@ -28,7 +28,7 @@
 #include "drivers/bno085.hpp"
 #include "drivers/bmp585.hpp"
 #include "drivers/ngps01.hpp"
-#include "drivers/sx1278.hpp"
+#include "comms/xbee_link.hpp"
 #include "drivers/ina260.hpp"
 #include "drivers/max17048.hpp"
 #include "logging/sd_logger.hpp"
@@ -69,16 +69,18 @@ public:
     /**
      * @brief Run the full BIT sequence.
      *
-     * @param i2c    Initialised I2C bus.
-     * @param spi    Initialised SPI bus.
-     * @param uart   Initialised UART bus (for N-GS-01).
-     * @param sd     SD logger (must be init'd before calling this; may be null).
-     * @param cfg    NVS config (must be init'd before calling this).
+     * @param i2c       Initialised I2C bus.
+     * @param spi       Initialised SPI bus.
+     * @param gnss_uart Initialised UART bus for N-GS-01.
+     * @param xbee_uart Initialised UART bus for XBee.
+     * @param sd        SD logger (must be init'd before calling this; may be null).
+     * @param cfg       NVS config (must be init'd before calling this).
      * @return BITResult with pass/fail flags.
      */
     BITResult run(hal::I2CBus&    i2c,
                   hal::SPIBus&    spi,
-                  hal::UARTBus&   uart,
+                  hal::UARTBus&   gnss_uart,
+                  hal::UARTBus&   xbee_uart,
                   logging::SDLogger*      sd,
                   config_mgr::NVSConfig&  cfg) noexcept;
 
@@ -89,8 +91,8 @@ private:
     uint32_t test_imu   (hal::I2CBus& i2c) noexcept;
     uint32_t test_baro  (hal::I2CBus& i2c) noexcept;
     uint32_t test_power (hal::I2CBus& i2c) noexcept;
-    uint32_t test_gnss  (hal::UARTBus& uart) noexcept;
-    uint32_t test_lora  (hal::SPIBus& spi) noexcept;
+    uint32_t test_gnss  (hal::UARTBus& gnss_uart) noexcept;
+    uint32_t test_xbee  (hal::UARTBus& xbee_uart) noexcept;
     uint32_t test_sd    (logging::SDLogger* sd) noexcept;
     uint32_t test_nvs   (config_mgr::NVSConfig& cfg) noexcept;
 };

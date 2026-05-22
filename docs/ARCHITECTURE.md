@@ -124,7 +124,7 @@ cansat_fw/
 │   │   └── encoder                # CAN-7USAT §5.3 CSV encoder (16 fields, 1 Hz)
 │   │
 │   ├── comms/                     # RF communications
-│   │   ├── lora_link              # SX1278 TX queue + RX callback dispatcher
+│   │   ├── xbee_link              # XBee Pro TX queue + RX callback dispatcher
 │   │   └── command_parser         # Uplink command decoder + callback registry
 │   │
 │   ├── logging/                   # Persistent data storage
@@ -174,7 +174,7 @@ app_main
         ├── hal ──────────────────── i2c_bus, spi_bus, uart_bus
         │
         ├── drivers ──────────────── hal
-        │     bno085, bmp585, ngps01, sx1278,
+        │     bno085, bmp585, ngps01, xbee_link,
         │     cc1101, ina260, max17048, sdp31, sht4x, sgp41
         │
         ├── control ──────────────── (standalone)

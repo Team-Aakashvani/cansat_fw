@@ -13,7 +13,7 @@ static const char* TAG = "CmdParser";
 namespace comms {
 
 RxCallback CommandParser::make_rx_callback() noexcept {
-    // Capture 'this' — safe as long as CommandParser outlives the LoRaLink.
+    // Capture 'this' — safe as long as CommandParser outlives the XBeeLink.
     return [this](const UplinkCommand& cmd) { dispatch(cmd); };
 }
 

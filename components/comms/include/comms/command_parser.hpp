@@ -2,10 +2,10 @@
  * @file command_parser.hpp
  * @brief Ground-station uplink command dispatcher.
  *
- * Receives UplinkCommand structs from LoRaLink and dispatches them to
+ * Receives UplinkCommand structs from XBeeLink and dispatches them to
  * registered handler callbacks. Each command type has one handler slot.
  *
- * Handlers are called from the LoRa task context (Core 1).
+ * Handlers are called from the radio task context (Core 1).
  * If a handler needs to communicate with other tasks it should use a
  * FreeRTOS queue or event group.
  *
@@ -21,7 +21,7 @@
  */
 #pragma once
 
-#include "comms/lora_link.hpp"
+#include "comms/comms_types.hpp"
 #include <functional>
 #include <cstdint>
 
@@ -58,10 +58,10 @@ public:
     void on_ota    (OtaHandler     h) noexcept { ota_handler_     = h; }
 
     /**
-     * @brief Build the RxCallback to pass to LoRaLink::set_rx_callback().
+     * @brief Build the RxCallback to pass to XBeeLink::set_rx_callback().
      *
      * Usage:
-     *   lora.set_rx_callback(parser.make_rx_callback());
+     *   xbee.set_rx_callback(parser.make_rx_callback());
      */
     RxCallback make_rx_callback() noexcept;
 

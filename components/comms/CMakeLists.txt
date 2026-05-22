@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS
-        "src/lora_link.cpp"
+        "src/xbee_link.cpp"
         "src/command_parser.cpp"
     INCLUDE_DIRS
         "include"

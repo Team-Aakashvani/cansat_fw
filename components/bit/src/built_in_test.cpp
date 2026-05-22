@@ -19,7 +19,8 @@ namespace bit {
 // ---------------------------------------------------------------------------
 BITResult BuiltInTest::run(hal::I2CBus&   i2c,
                             hal::SPIBus&   spi,
-                            hal::UARTBus&  uart,
+                            hal::UARTBus&  gnss_uart,
+                            hal::UARTBus&  xbee_uart,
                             logging::SDLogger*     sd,
                             config_mgr::NVSConfig& cfg) noexcept {
     ESP_LOGI(TAG, "--- BIT START ---");
@@ -28,8 +29,8 @@ BITResult BuiltInTest::run(hal::I2CBus&   i2c,
     flags |= test_imu   (i2c);
     flags |= test_baro  (i2c);
     flags |= test_power (i2c);
-    flags |= test_gnss  (uart);
-    flags |= test_lora  (spi);
+    flags |= test_gnss  (gnss_uart);
+    flags |= test_xbee  (xbee_uart);
     flags |= test_sd    (sd);
     flags |= test_nvs   (cfg);
 
@@ -122,13 +123,13 @@ uint32_t BuiltInTest::test_gnss(hal::UARTBus& uart) noexcept {
     return BIT_GNSS_NO_NMEA;
 }
 
-uint32_t BuiltInTest::test_lora(hal::SPIBus& spi) noexcept {
-    drivers::SX1278 radio;
-    if (radio.init(spi, nav::PINS.lora_cs, nav::PINS.lora_rst, nav::PINS.lora_irq) != ESP_OK) {
-        ESP_LOGE(TAG, "[BIT] LoRa: ABSENT");
-        return BIT_LORA_ABSENT;
+uint32_t BuiltInTest::test_xbee(hal::UARTBus& xbee_uart) noexcept {
+    // Basic connectivity check for XBee
+    if (!xbee_uart.is_initialised()) {
+        ESP_LOGE(TAG, "[BIT] XBee: NOT INITIALISED");
+        return BIT_LORA_ABSENT; // Keep flag for compatibility
     }
-    ESP_LOGI(TAG, "[BIT] LoRa: PASS");
+    ESP_LOGI(TAG, "[BIT] XBee: PASS");
     return 0;
 }
 

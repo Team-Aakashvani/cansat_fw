@@ -34,9 +34,9 @@
 | **Control (FC)** | 100 Hz attitude + descent-rate PID with battery compensation, anti-windup, and motor mixer |
 | **Media (P4)** | ESP32-P4 dedicated MIPI-CSI capture, hardware H.264 encoding, high-speed SDMMC storage |
 | **RF Mapping** | Independent secondary mission: CC1101 directional RSSI scan synchronized with FC nav state |
-| **Comms** | SX1278 LoRa 433 MHz downlink (1 Hz telemetry CSV) + uplink (command parser) |
+| **Comms** | XBee Pro 2.4GHz/900MHz (1 Hz telemetry CSV) + Uplink (Command Parser) |
 | **Inter-MCU Link** | XOR-checksum-verified UART at 921,600 baud with heartbeat monitoring and failsafe |
-| **Ground Station** | Transparent LoRa-to-USB bridge with promiscuous mode and emergency override |
+| **Ground Station** | Transparent XBee-to-USB bridge with promiscuous mode and emergency override |
 
 ---
 
@@ -98,8 +98,8 @@ The firmware role is selected at **compile-time** via `idf.py menuconfig`.
 | BNO085 | I2C-0 (GPIO 8/9) | 0x4A | 100 Hz | IMU — accel + calibrated gyro |
 | BMP585 | I2C-0 (GPIO 8/9) | 0x46 | 50 Hz | Barometer — altitude AGL |
 | N-GS-01 | UART-1 (GPIO 17/18) | 115200 baud | 1 Hz | NavIC GNSS — position + velocity |
-| SX1278 | SPI (GPIO 35/37/36) | CS=GPIO34 | — | LoRa 433 MHz transceiver |
-| CC1101 | SPI (shared) | CS=GPIO21 | — | RF scanner (secondary mission) |
+| XBee Pro | UART-2 (GPIO 34/32) | 115200 baud | 1 Hz | Primary Telemetry / Telecommand |
+| CC1101 | SPI (GPIO 35/37/36) | CS=GPIO21 | — | RF scanner (secondary mission) |
 | INA260 | I2C-1 (GPIO 10/11) | 0x40 | 1 Hz | Voltage/current monitor |
 | MAX17048 | I2C-1 (GPIO 10/11) | 0x36 | 1 Hz | LiPo fuel gauge |
 | SDP31 | I2C-1 (GPIO 10/11) | 0x21 | — | Differential pressure / airspeed |
@@ -151,8 +151,8 @@ PRE_FLIGHT → BOOST → BALLISTIC → PARACHUTE → DRONE_HOVER → LANDED
 | `nav_task` | 0 (RT) | 100 Hz | MAX-1 | 8192 W | IMU ingest → IMM EKF propagation |
 | `control_task` | 0 (RT) | 100 Hz | MAX-2 | 4096 W | PID attitude + descent → motor mixer |
 | `sensor_task` | 1 (SYS) | 50 Hz | MAX-3 | 4096 W | Baro (50 Hz) + GNSS (1 Hz) poll → EKF update |
-| `telem_task` | 1 (SYS) | 1 Hz | 5 | 4096 W | Encode CSV → LoRa TX + SD write |
-| `logging_task` | 1 (SYS) | 1 Hz / 5 s | 4 | 8192 W | LoRa spin + SD flush |
+| `telem_task` | 1 (SYS) | 1 Hz | 5 | 4096 W | Encode CSV → XBee TX + SD write |
+| `logging_task` | 1 (SYS) | 1 Hz / 5 s | 4 | 8192 W | XBee spin + SD flush |
 | `power_task` | 1 (SYS) | 1 Hz | 3 | 2048 W | INA260 + MAX17048 aggregation |
 | `p4_link_task` | 1 (SYS) | 10 Hz | 3 | 2048 W | UART heartbeat + command to P4 |
 | `rf_map_task` | 1 (SYS) | sweep | 3 | — | CC1101 RSSI scan + SD log |
@@ -205,9 +205,9 @@ app_main()
   └─ main_fc() / main_gcs() / main_p4()   (role dispatch)
        │
        ├─ 1. Create FreeRTOS primitives (mutexes, event groups)
-       ├─ 2. HAL init (I2C-0, I2C-1, SPI, UART-1 GNSS, UART-2 P4)
-       ├─ 3. Driver init (BNO085, BMP585, N-GS-01, SX1278, INA260, MAX17048, SDP31, SHT4x, SGP41, CC1101)
-       ├─ 4. Comms init (LoRa link + command parser callbacks)
+       ├─ 2. HAL init (I2C-0, I2C-1, SPI, UART-1 GNSS, UART-2 XBee, UART-0 P4)
+       ├─ 3. Driver init (BNO085, BMP585, N-GS-01, INA260, MAX17048, SDP31, SHT4x, SGP41, CC1101)
+       ├─ 4. Comms init (XBee link + command parser callbacks)
        ├─ 5. Logging init (SD card mount + event log; SD failure is non-fatal)
        ├─ 6. Power manager init + low-battery callback
        ├─ 7. BIT — 10 hardware checks; HALT on critical failure (LED rapid blink)
@@ -225,7 +225,7 @@ app_main()
 | 0 | `BIT_IMU_ABSENT` — BNO085 not responding | **CRITICAL — halts** |
 | 1 | `BIT_BARO_ABSENT` — BMP585 not responding | **CRITICAL — halts** |
 | 2 | `BIT_POWER_ABSENT` — INA260 not responding | **CRITICAL — halts** |
-| 4 | `BIT_LORA_ABSENT` — SX1278 not detected | **CRITICAL — halts** |
+| 4 | `BIT_RADIO_ABSENT` — XBee not responding | **CRITICAL — halts** |
 | 3 | `BIT_GNSS_NO_NMEA` — No NMEA in 2 s | Warning only |
 | 5 | `BIT_SD_FAIL` — SD card not mounted | Warning only |
 | 6 | `BIT_NVS_FAIL` — NVS namespace error | Warning only |
@@ -237,7 +237,7 @@ app_main()
 
 ## 8. Command Reference
 
-Uplink format: `<TEAM_ID>,<CMD>[,<ARG>]\n` over LoRa 433 MHz.
+Uplink format: `<TEAM_ID>,<CMD>[,<ARG>]\n` over XBee Pro.
 
 | Command | Argument | Action |
 |---------|----------|--------|
@@ -302,17 +302,15 @@ One packet per second via LoRa. Also mirrored to SD card (`CANSAT_XXXX.csv`).
 1234,00:04:32,272,587.34,94312.5,18.3,7.41,07:15:44,12.971600,77.594600,912.30,8,0.12,-0.04,1.23,3
 ```
 
-### LoRa Link Parameters
+### XBee Pro Link Parameters
 
 | Parameter | Value |
 |-----------|-------|
-| Frequency | 433 MHz |
-| Spreading Factor | SF10 |
-| Bandwidth | 125 kHz |
-| Coding Rate | CR 4/5 |
-| TX Power | 17 dBm (50 mW) |
-| CRC | Enabled |
-| Approx. Range | ~8 km line-of-sight |
+| Mode | Transparent (AT) |
+| Baud Rate | 115200 |
+| PAN ID | Set to Team ID |
+| Protocol | 802.15.4 |
+| Approx. Range | ~1-5 km line-of-sight |
 
 ---
 
@@ -352,12 +350,13 @@ Flash: 8 MB total (`partitions.csv`)
 - [ ] Watchdog alive (no early TWDT panics during 60 s bench soak)
 
 ---
-
-## 13. Documentation Index
-
+- [ ] XBee PAN ID matches team ID
+- [ ] Telemetry confirmed on GCS (1 Hz packets, correct team ID)
+...
 | Document | Location | Description |
 |----------|----------|-------------|
 | **README.md** | `/` | This file — project overview and quick start |
+| **WIRING_DIAGRAM.md** | `docs/` | Definitive pin-to-pin wiring map for all units |
 | **ARCHITECTURE.md** | `docs/` | Full software architecture, nav stack, data flow |
 | **BUILD_GUIDE.md** | `docs/` | Toolchain setup, build commands, error reference |
 | **FLASH_GUIDE.md** | `docs/` | Flashing, port detection, first-boot procedure |

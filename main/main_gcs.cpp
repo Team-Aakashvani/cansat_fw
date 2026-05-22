@@ -13,15 +13,11 @@
 #include "esp_log.h"
 #include "driver/uart.h"
 #include "hal/spi_bus.hpp"
-#include "comms/lora_link.hpp"
+#include "comms/xbee_link.hpp"
 
 // PIN DEFINITIONS — ESP32-S3 WROOM-1
-#define GCS_SPI_MOSI  35
-#define GCS_SPI_MISO  37
-#define GCS_SPI_SCK   36
-#define GCS_LORA_CS   34
-#define GCS_LORA_RST  33
-#define GCS_LORA_IRQ  32   // Matches nav::PINS.lora_irq
+#define GCS_XBEE_TX   34
+#define GCS_XBEE_RX   32
 
 #define GCS_BAUD_RATE 921600
 #define GCS_UART      UART_NUM_0
@@ -36,7 +32,7 @@ static const char UPLINK_PREFIX[] = "$UPLINK,";
 
 static void gcs_task(void* pvParameters)
 {
-    comms::LoRaLink* lora = static_cast<comms::LoRaLink*>(pvParameters);
+    comms::XBeeLink* xbee = static_cast<comms::XBeeLink*>(pvParameters);
     uint8_t uplink_buf[UPLINK_BUF_SZ];
     size_t  uplink_pos = 0;
 
@@ -45,10 +41,10 @@ static void gcs_task(void* pvParameters)
     while (true)
     {
         // DOWNLINK: Radio -> USB
-        if (lora->spin())
+        if (xbee->spin())
         {
-            const uint8_t* rx_data = lora->last_rx_data();
-            size_t         rx_len  = lora->last_rx_len();
+            const uint8_t* rx_data = xbee->last_rx_data();
+            size_t         rx_len  = xbee->last_rx_len();
             if (rx_data && rx_len > 0)
             {
                 uart_write_bytes(GCS_UART, rx_data, rx_len);
@@ -66,7 +62,7 @@ static void gcs_task(void* pvParameters)
                     strncmp((const char*)uplink_buf, UPLINK_PREFIX, sizeof(UPLINK_PREFIX) - 1) == 0)
                 {
                     const char* cmd_part = (const char*)uplink_buf + (sizeof(UPLINK_PREFIX) - 1);
-                    lora->enqueue_packet(cmd_part, strlen(cmd_part));
+                    xbee->enqueue_packet(cmd_part, strlen(cmd_part));
                     ESP_LOGI(TAG, "Uplink: %s", cmd_part);
                 }
                 uplink_pos = 0;
@@ -101,13 +97,13 @@ void main_gcs()
     ESP_ERROR_CHECK(uart_driver_install(GCS_UART, 2048, 2048, 0, nullptr, 0));
     ESP_ERROR_CHECK(uart_param_config(GCS_UART, &uart_config));
 
-    static hal::SPIBus spi;
-    ESP_ERROR_CHECK(spi.init(GCS_SPI_MOSI, GCS_SPI_MISO, GCS_SPI_SCK));
+    static hal::UARTBus xbee_uart;
+    ESP_ERROR_CHECK(xbee_uart.init(UART_NUM_2, GCS_XBEE_TX, GCS_XBEE_RX, nav::TELEM_CFG.xbee_baud));
 
-    static comms::LoRaLink lora;
-    ESP_ERROR_CHECK(lora.init(spi, GCS_LORA_CS, GCS_LORA_RST, GCS_LORA_IRQ));
-    lora.set_promiscuous(true);
+    static comms::XBeeLink xbee;
+    ESP_ERROR_CHECK(xbee.init(xbee_uart));
+    xbee.set_promiscuous(true);
 
-    xTaskCreatePinnedToCore(gcs_task, "gcs", STK_GCS, &lora, PRI_GCS_TASK, nullptr, 1);
+    xTaskCreatePinnedToCore(gcs_task, "gcs", STK_GCS, &xbee, PRI_GCS_TASK, nullptr, 1);
     ESP_LOGI(TAG, "Bridge Live.");
 }

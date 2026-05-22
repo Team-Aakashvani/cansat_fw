@@ -2,10 +2,9 @@
  * CAN-7USAT 2026 — GCS Bridge Firmware
  * =====================================
  *
- * FILE:  main/main_gcs.cpp
+ * FILE:  main/main_gcs_pin.cpp
  *
- * Pin assignments sourced from the ESP32-S3 WROOM-1 pinout diagram.
- * LoRa IRQ assigned to GPIO21 (was unused).
+ * Migration to XBee UART.
  */
 
 #include <cstring>
@@ -15,23 +14,16 @@
 #include "esp_log.h"
 #include "driver/uart.h"
 
-#include "hal/spi_bus.hpp"
-#include "comms/lora_link.hpp"
+#include "hal/uart_bus.hpp"
+#include "comms/xbee_link.hpp"
 
 
 // =============================================================================
 // PIN DEFINITIONS — from the ESP32-S3 WROOM-1 board pinout
 // =============================================================================
 
-// SPI pins (shared bus — same physical wires as flight computer)
-#define GCS_SPI_MOSI  35   // GPIO35 — SPI_MOSI
-#define GCS_SPI_MISO  37   // GPIO37 — SPI_MISO
-#define GCS_SPI_SCK   36   // GPIO36 — SPI_SCK
-
-// LoRa radio control pins
-#define GCS_LORA_CS   34   // GPIO34 — LORA_CS
-#define GCS_LORA_RST  33   // GPIO33 — LORA_RST
-#define GCS_LORA_IRQ  21   // GPIO21 — was unused, assigned to LoRa DIO0/IRQ
+#define GCS_XBEE_TX   34
+#define GCS_XBEE_RX   32
 
 // USB serial speed — must match parser.py
 #define GCS_BAUD_RATE 921600
@@ -57,7 +49,7 @@ static const char UPLINK_PREFIX[] = "$UPLINK,";
 
 static void gcs_task(void* pvParameters)
 {
-    comms::LoRaLink* lora = static_cast<comms::LoRaLink*>(pvParameters);
+    comms::XBeeLink* xbee = static_cast<comms::XBeeLink*>(pvParameters);
 
     uint8_t uplink_buf[UPLINK_BUF_SZ];
     size_t  uplink_pos = 0;
@@ -67,10 +59,10 @@ static void gcs_task(void* pvParameters)
     while (true)
     {
         // DOWNLINK — radio packet arrived? → write to USB
-        if (lora->spin())
+        if (xbee->spin())
         {
-            const uint8_t* rx_data = lora->last_rx_data();
-            size_t         rx_len  = lora->last_rx_len();
+            const uint8_t* rx_data = xbee->last_rx_data();
+            size_t         rx_len  = xbee->last_rx_len();
 
             if (rx_data != nullptr && rx_len > 0)
             {
@@ -97,7 +89,7 @@ static void gcs_task(void* pvParameters)
                     {
                         // Skip "$UPLINK," prefix (8 bytes)
                         const char* cmd_part = (const char*)uplink_buf + (sizeof(UPLINK_PREFIX) - 1);
-                        lora->enqueue_packet(cmd_part, strlen(cmd_part));
+                        xbee->enqueue_packet(cmd_part, strlen(cmd_part));
                         ESP_LOGI(TAG, "Uplink: %s", cmd_part);
                     }
                     else
@@ -158,30 +150,30 @@ void main_gcs()
 
     ESP_LOGI(TAG, "USB UART initialised");
 
-    // STEP 1: Initialise the SPI bus
-    static hal::SPIBus spi;
-    ESP_ERROR_CHECK(spi.init(GCS_SPI_MOSI, GCS_SPI_MISO, GCS_SPI_SCK));
+    // STEP 1: Initialise the XBee UART
+    static hal::UARTBus xbee_uart;
+    ESP_ERROR_CHECK(xbee_uart.init(UART_NUM_2, GCS_XBEE_TX, GCS_XBEE_RX, nav::TELEM_CFG.xbee_baud));
 
-    ESP_LOGI(TAG, "SPI bus initialised");
+    ESP_LOGI(TAG, "XBee UART initialised");
 
-    // STEP 2: Initialise the LoRa radio
-    static comms::LoRaLink lora;
-    ESP_ERROR_CHECK(lora.init(spi, GCS_LORA_CS, GCS_LORA_RST, GCS_LORA_IRQ));
-    lora.set_promiscuous(true);
+    // STEP 2: Initialise the XBee link
+    static comms::XBeeLink xbee;
+    ESP_ERROR_CHECK(xbee.init(xbee_uart));
+    xbee.set_promiscuous(true);
 
-    ESP_LOGI(TAG, "LoRa radio initialised (Promiscuous mode ON)");
+    ESP_LOGI(TAG, "XBee radio initialised (Promiscuous mode ON)");
 
     // STEP 3: Start the GCS bridge task on Core 1
     xTaskCreatePinnedToCore(
         gcs_task,
         "gcs",
         STK_GCS,
-        &lora,
+        &xbee,
         PRI_GCS_TASK,
         nullptr,
         1
     );
 
     ESP_LOGI(TAG, "GCS bridge task launched on Core 1");
-    ESP_LOGI(TAG, "Bridge is live — LoRa <-> USB serial");
+    ESP_LOGI(TAG, "Bridge is live — XBee <-> USB serial");
 }

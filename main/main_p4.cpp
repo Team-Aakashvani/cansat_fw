@@ -57,8 +57,8 @@ static const char* TAG = "P4";
 
 #define P4_FC_UART       UART_NUM_1
 #define P4_FC_BAUD       921600
-#define P4_FC_TX_PIN     1    // Connected to S3 RX (GPIO 3)
-#define P4_FC_RX_PIN     3    // Connected to S3 TX (GPIO 1)
+#define P4_FC_TX_PIN     27    // Connected to S3 RX (GPIO 27)
+#define P4_FC_RX_PIN     26    // Connected to S3 TX (GPIO 26)
 #define P4_UART_BUF_SIZE 1024
 
 // =============================================================================

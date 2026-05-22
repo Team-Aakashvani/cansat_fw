@@ -17,8 +17,8 @@
  * Boot sequence:
  *   1. NVS init + config load
  *   2. HAL init (I2C0, I2C1, SPI, UART)
- *   3. Driver init (BNO085, BMP585, N-GS-01, SX1278, INA260, MAX17048)
- *   4. LoRa link init + command parser setup
+ *   3. Driver init (BNO085, BMP585, N-GS-01, INA260, MAX17048)
+ *   4. XBee link init + command parser setup
  *   5. SD card mount + event log init
  *   6. BIT (Built-In Test) — halt on critical fail
  *   7. FlightComputer init (EKF, IMM, supervisor)
@@ -42,7 +42,6 @@
 #include "drivers/bno085.hpp"
 #include "drivers/bmp585.hpp"
 #include "drivers/ngps01.hpp"
-#include "drivers/sx1278.hpp"
 #include "drivers/ina260.hpp"
 #include "drivers/max17048.hpp"
 #include "drivers/sdp31.hpp"
@@ -54,7 +53,7 @@
 
 #include "telemetry/encoder.hpp"
 
-#include "comms/lora_link.hpp"
+#include "comms/xbee_link.hpp"
 #include "comms/command_parser.hpp"
 #include "comms/ota_service.hpp"
 
@@ -121,7 +120,8 @@ static const char* TAG = "main";
 // HAL
 static hal::I2CBus    i2c0;   ///< BNO085 + BMP585
 static hal::I2CBus    i2c1;   ///< Environmental sensors + power monitors
-static hal::SPIBus    spi;    ///< SX1278 LoRa
+static hal::UARTBus   xbee_uart; ///< XBee Pro Radio
+static hal::SPIBus    spi;    ///< Shared SPI (CC1101)
 static hal::UARTBus   uart;   ///< N-GS-01 GNSS
 
 // Sensor drivers
@@ -143,7 +143,7 @@ static control::PID         descent_pid;
 static control::MotorMixer  motors;
 
 // Comms
-static comms::LoRaLink      lora;
+static comms::XBeeLink      xbee;
 static comms::CommandParser cmd_parser;
 static comms::OTAService    ota_svc;
 
@@ -508,8 +508,8 @@ static void telem_task(void* /*arg*/) {
 
         int n = telem_enc.encode(frame, csv_buf, sizeof(csv_buf));
         if (n > 0) {
-            // 1. Send via LoRa (LoRaLink will prepend TEAM_ID and append CRC+\n)
-            lora.enqueue_packet(csv_buf, (size_t)n);
+            // 1. Send via XBee
+            xbee.enqueue_packet(csv_buf, (size_t)n);
 
             // 2. Log to SD (Must include TEAM_ID and \n for compliance)
             char sd_buf[telemetry::TelemetryEncoder::BUF_LEN + 16];
@@ -540,10 +540,10 @@ static void logging_task(void* /*arg*/) {
     while (true) {
         TickType_t now = xTaskGetTickCount();
 
-        // LoRa spin (drives TX/RX at 1Hz)
+        // XBee spin (drives TX/RX at 1Hz)
         if ((now - lora_wake) >= lora_period) {
             lora_wake = now;
-            lora.spin();
+            xbee.spin();
         }
 
         // SD flush
@@ -747,7 +747,7 @@ static void setup_command_handlers() {
         }
     });
 
-    lora.set_rx_callback(cmd_parser.make_rx_callback());
+    xbee.set_rx_callback(cmd_parser.make_rx_callback());
 }
 
 // ===========================================================================
@@ -782,8 +782,15 @@ extern "C" void main_fc() {
     ESP_ERROR_CHECK(i2c0.init(I2C_NUM_0, nav::PINS.i2c0_sda, nav::PINS.i2c0_scl, 400000));
     ESP_ERROR_CHECK(i2c1.init(I2C_NUM_1, nav::PINS.i2c1_sda, nav::PINS.i2c1_scl, 400000));
     ESP_ERROR_CHECK(spi.init(nav::PINS.spi_mosi, nav::PINS.spi_miso, nav::PINS.spi_sck));
+    
+    // Production UART Allocation:
+    // UART1: GNSS (NavIC)
+    // UART2: XBee Radio (Primary TM/TC)
+    // UART0: P4 Media Coprocessor (Console output disabled)
+    
     ESP_ERROR_CHECK(uart.init(UART_NUM_1, nav::PINS.gnss_tx, nav::PINS.gnss_rx, 115200));
-    ESP_ERROR_CHECK(p4_uart.init(UART_NUM_2, nav::PINS.p4_tx, nav::PINS.p4_rx, 921600));
+    ESP_ERROR_CHECK(xbee_uart.init(UART_NUM_2, nav::PINS.xbee_tx, nav::PINS.xbee_rx, nav::TELEM_CFG.xbee_baud));
+    ESP_ERROR_CHECK(p4_uart.init(UART_NUM_0, nav::PINS.p4_tx, nav::PINS.p4_rx, 921600));
     p4_link_drv.init(p4_uart);
 
     // ------------------------------------------------------------------
@@ -801,9 +808,8 @@ extern "C" void main_fc() {
     // ------------------------------------------------------------------
     // 4. Comms init
     // ------------------------------------------------------------------
-    ESP_LOGI(TAG, "Initialising LoRa link...");
-    ESP_ERROR_CHECK(lora.init(spi, nav::PINS.lora_cs,
-                              nav::PINS.lora_rst, nav::PINS.lora_irq));
+    ESP_LOGI(TAG, "Initialising XBee link...");
+    ESP_ERROR_CHECK(xbee.init(xbee_uart));
     setup_command_handlers();
 
     // ------------------------------------------------------------------
@@ -842,7 +848,7 @@ extern "C" void main_fc() {
     // ------------------------------------------------------------------
     ESP_LOGI(TAG, "Running BIT...");
     bit::BuiltInTest bit_runner;
-    bit::BITResult bit_res = bit_runner.run(i2c0, spi, uart,
+    bit::BITResult bit_res = bit_runner.run(i2c0, spi, uart, xbee_uart,
                                              &sd_logger, nvs_cfg);
     event_log.log_event(bit_res.pass() ? logging::EventCode::BIT_PASS
                                        : logging::EventCode::BIT_FAIL,

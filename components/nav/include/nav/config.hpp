@@ -335,22 +335,23 @@ struct PinConfig {
     int i2c1_sda = 10;
     int i2c1_scl = 11;
 
-    // SPI Bus (SX1278 LoRa)
+    // SPI Bus (Shared — CC1101)
     int spi_mosi = 35;
     int spi_miso = 37;
     int spi_sck  = 36;
-    int lora_cs  = 34;
-    int lora_rst = 33;
-    int lora_irq = 32;   ///< DIO0 interrupt
     int cc1101_cs = 21;  ///< RF scanner CS
+
+    // UART3 (XBee Pro Radio)
+    int xbee_tx  = 34;
+    int xbee_rx  = 32;
 
     // UART1 (N-GS-01 NavIC GNSS)
     int gnss_tx  = 17;
     int gnss_rx  = 18;
 
     // UART2 (ESP32-P4 Media Coprocessor)
-    int p4_tx    = 1;
-    int p4_rx    = 3;
+    int p4_tx    = 26;
+    int p4_rx    = 27;
 
     // SDMMC (SD card logging)
     int sd_clk   = 14;
@@ -383,13 +384,8 @@ static constexpr PinConfig PINS{};
 
 struct TelemetryConfig {
     uint16_t team_id             = 1234;     ///< REPLACE with actual team ID
-    uint32_t lora_frequency_hz   = 433000000; ///< 433MHz ISM band
-    uint8_t  lora_bandwidth      = 7;        ///< 125kHz (BW index)
-    uint8_t  lora_sf             = 10;       ///< Spreading factor 10
-    uint8_t  lora_cr             = 5;        ///< Code rate 4/5
-    int8_t   lora_tx_power_dbm   = 17;       ///< 17dBm (50mW)
-    uint16_t lora_preamble_len   = 8;
-    uint8_t  lora_sync_word      = 0x12;     ///< NETID / PANID = Team ID lower byte
+    uint32_t xbee_baud           = 115200;
+    uint8_t  xbee_pan_id         = 0x12;     ///< Set to Team ID lower byte per guidelines
 
     double   telemetry_rate_hz   = 1.0;      ///< 1Hz mandatory per rules
     uint32_t telemetry_buf_size  = 256;      ///< Max CSV line length

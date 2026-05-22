@@ -77,7 +77,7 @@ public:
      * @brief Build CSV telemetry fields from a TelemetryFrame.
      * 
      * NOTE: This produces the CSV string starting from MISSION_TIME. 
-     * The TEAM_ID is prepended by the LoRa link layer.
+     * The TEAM_ID is prepended by the XBee link layer.
      * 
      * Returns length written (excluding null terminator).
      */

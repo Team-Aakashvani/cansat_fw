@@ -64,9 +64,10 @@ LiPo 2S (7.4V)
           GPIO12─┤ SD_D2        GPIO13  ├─ SD_D3
           GPIO14─┤ SD_CLK       GPIO15  ├─ SD_CMD
           GPIO16─┤ MOTOR_3      GPIO17  ├─ GNSS_TX
-          GPIO18─┤ GNSS_RX      GPIO19  ├─ (USB D-)
-          GPIO20─┤ (USB D+)     GPIO21  ├─ (not used)
-          GPIO33─┤ LORA_RST     GPIO34  ├─ LORA_CS
+          GPIO18─┤ GNSS_RX      GPIO19  ├─ (USB-JTAG D-)
+          GPIO20─┤ (USB-JTAG D+)GPIO21  ├─ CC1101_CS
+          GPIO26─┤ P4_LINK_TX   GPIO27  ├─ P4_LINK_RX
+          GPIO32─┤ XBEE_RX      GPIO34  ├─ XBEE_TX
           GPIO35─┤ SPI_MOSI     GPIO36  ├─ SPI_SCK
           GPIO37─┤ SPI_MISO     GPIO38  ├─ SERVO
           GPIO39─┤ BEACON       GPIO40  ├─ PWR_SWITCH
@@ -74,149 +75,52 @@ LiPo 2S (7.4V)
                  └──────────────────────┘
 ```
 
+**NOTE:** For a detailed point-to-point mapping of all wires, see [WIRING_DIAGRAM.md](./WIRING_DIAGRAM.md).
+
 ---
 
-## I2C Bus 0 — Navigation Sensors (GPIO 8/9)
+## High-Speed Serial Links
 
-**Pull-up resistors:** 4.7 kΩ to 3.3 V on SDA and SCL. Do not omit.
+### XBee Pro (Primary Telemetry)
+The XBee Pro operates in **Transparent Mode** on UART2. It carries the primary 1 Hz telemetry CSV and receives uplink commands.
 
-### BNO085 (IMU)
-
-| BNO085 Pin | ESP32-S3 Pin | Notes |
+| XBee Pro Pin | ESP32-S3 Pin | Notes |
 |------------|-------------|-------|
-| VDD | 3.3V | |
+| DIN (Pin 3) | GPIO34 | TX from ESP |
+| DOUT (Pin 2)| GPIO32 | RX to ESP |
+| VCC | 3.3V | 215mA peak TX |
 | GND | GND | |
-| SDA | GPIO8 | 4.7 kΩ pull-up |
-| SCL | GPIO9 | 4.7 kΩ pull-up |
-| PS0 | GND | Selects I2C mode (PS0=0, PS1=0) |
-| PS1 | GND | |
-| NRST | 3.3V via 10kΩ | Optional reset; tie high if unused |
-| INT | (not connected) | Interrupt — unused in current firmware |
 
-Default I2C address: **0x4A** (SA0 pin = GND)
-To use address 0x4B: connect SA0 to 3.3V and update `I2C_ADDR` in `bno085.hpp`.
+### P4 Media Link (Video Control)
+Dedicated link to the ESP32-P4 coprocessor for video state management.
 
-**Orientation:** Mount BNO085 with X-axis pointing toward the nose of the CanSat (upward on launch rail). The firmware assumes body-z aligned with launch rail vertical.
-
-### BMP585 (Barometer)
-
-| BMP585 Pin | ESP32-S3 Pin | Notes |
+| P4 Signal | ESP32-S3 Pin | Notes |
 |------------|-------------|-------|
-| VDDIO | 3.3V | |
-| GND | GND | |
-| SDA | GPIO8 | Shared with BNO085 |
-| SCL | GPIO9 | Shared with BNO085 |
-| SDO | GND | Sets I2C address 0x46 |
-| CSB | 3.3V | Selects I2C mode (not SPI) |
+| P4_RX | GPIO27 | Commands to P4 |
+| P4_TX | GPIO26 | Heartbeat from P4 |
 
-Default I2C address: **0x46** (SDO = GND). For 0x47: SDO = 3.3V.
-
-**Placement:** Mount BMP585 with a clear port to ambient air. Shield from direct solar radiation and motor downdraft. A small labyrinth vent is recommended.
-
----
-
-## I2C Bus 1 — Environmental + Power (GPIO 10/11)
-
-Same pull-up requirement: 4.7 kΩ to 3.3 V.
-
-### INA260 (Voltage/Current Monitor)
-
-| INA260 Pin | Connection | Notes |
-|------------|-----------|-------|
-| V+ | Battery+ (7.4V side) | Input rail |
-| V- | Load+ (to BEC) | Output rail |
-| ALERT | (not connected) | |
-| SDA | GPIO10 | |
-| SCL | GPIO11 | |
-| GND | GND | |
-| A0 | GND | I2C address 0x40 |
-| A1 | GND | |
-
-The INA260 measures bus voltage and bidirectional current on the main supply rail. Connect the bus voltage pins **in-line** with your main power path.
-
-### MAX17048 (Fuel Gauge)
-
-| MAX17048 Pin | Connection |
-|-------------|-----------|
-| VCELL | LiPo+ (direct, no load) |
-| VSS | LiPo− |
-| SDA | GPIO10 |
-| SCL | GPIO11 |
-| ALERT | (not connected) |
-
-Fixed I2C address: **0x36**
-
-### SDP31 (Differential Pressure — Airspeed)
-
-| Pin | Connection |
-|-----|-----------|
-| VDD | 3.3V |
-| GND | GND |
-| SDA | GPIO10 |
-| SCL | GPIO11 |
-| Port 1 | Pitot tube facing forward |
-| Port 2 | Static pressure port |
-
-I2C address: **0x21**
-
-### SHT4x (Humidity/Temperature)
-
-| Pin | Connection |
-|-----|-----------|
-| VDD | 3.3V |
-| GND | GND |
-| SDA | GPIO10 |
-| SCL | GPIO11 |
-
-I2C address: **0x44**. Shield from direct sunlight and motor heat.
-
-### SGP41 (VOC/NOx)
-
-| Pin | Connection |
-|-----|-----------|
-| VDD | 3.3V |
-| GND | GND |
-| SDA | GPIO10 |
-| SCL | GPIO11 |
-
-I2C address: **0x59**
-
----
-
-## SPI Bus — LoRa Radio (GPIO 33–37)
-
-### SX1278 LoRa Module (e.g. Ra-02 or custom)
-
-| SX1278 Pin | ESP32-S3 Pin | Notes |
-|------------|-------------|-------|
-| VCC | 3.3V | Max 200 mA peak during TX |
-| GND | GND | |
-| MOSI | GPIO35 | |
-| MISO | GPIO37 | |
-| SCK | GPIO36 | |
-| NSS (CS) | GPIO34 | Active low |
-| RESET | GPIO33 | Active low |
-| DIO0 | GPIO32 | TxDone/RxDone IRQ |
-| DIO1 | (not connected) | |
-| ANT | Whip antenna | 17.3 cm for 433 MHz quarter-wave |
-
-**Antenna:** A simple 17.3 cm wire monopole works. For better gain use a 3 dBi helical. **Never transmit without antenna connected.**
-
----
-
-## UART Bus — N-GS-01 GNSS (GPIO 17/18)
+### GNSS (NavIC)
+Standard UART1 connection to the N-GS-01 module.
 
 | N-GS-01 Pin | ESP32-S3 Pin | Notes |
 |-------------|-------------|-------|
-| VCC | 3.3V or 5V (check module spec) | |
-| GND | GND | |
-| TX | GPIO18 (ESP RX) | GNSS transmits NMEA to ESP |
-| RX | GPIO17 (ESP TX) | ESP sends config to GNSS |
+| TX | GPIO18 | NMEA Data |
+| RX | GPIO17 | Configuration |
 
-Baud rate: **115200** (default N-GS-01 factory setting).
-Protocol: NMEA-0183 sentences GPGGA, GPRMC, GPVTG.
+---
 
-**Antenna:** The N-GS-01 has an internal patch antenna. Position the CanSat with the GNSS module facing upward (antenna looking at sky). Avoid metal structures within 5 cm of the patch.
+## SPI Bus — CC1101 RF Scanner (GPIO 35–37)
+
+The SPI bus is used exclusively by the **CC1101 RF scanner** for the secondary mission objective.
+
+| CC1101 Pin | ESP32-S3 Pin |
+|------------|-------------|
+| MOSI | GPIO35 |
+| MISO | GPIO37 |
+| SCK | GPIO36 |
+| CS | GPIO21 |
+| VCC | 3.3V |
+| GND | GND |
 
 ---
 

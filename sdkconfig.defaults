@@ -67,10 +67,15 @@ CONFIG_FATFS_LFN_HEAP=y
 CONFIG_FATFS_MAX_LFN=255
 CONFIG_FATFS_CODEPAGE_437=y
 
-# ---- UART -----------------------------------------------------------------
-CONFIG_ESP_CONSOLE_UART_DEFAULT=y
-CONFIG_ESP_CONSOLE_UART_NUM=0
-CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
+# ---- Console Output -------------------------------------------------------
+# Use the built-in USB Serial/JTAG Controller for production logs.
+# This frees up UART0 for the P4 Media Coprocessor link.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+CONFIG_ESP_CONSOLE_UART_CUSTOM=n
+CONFIG_ESP_CONSOLE_UART_NONE=n
+CONFIG_ESP_CONSOLE_UART_DEFAULT=n
+# UART0 baud is now managed by the P4 Link driver, not the console.
 
 # ---- I2C ------------------------------------------------------------------
 CONFIG_I2C_ISR_IRAM_SAFE=y
