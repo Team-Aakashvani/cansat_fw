@@ -356,7 +356,7 @@ Flash: 8 MB total (`partitions.csv`)
 | Document | Location | Description |
 |----------|----------|-------------|
 | **README.md** | `/` | This file — project overview and quick start |
-| **WIRING_DIAGRAM.md** | `docs/` | Definitive pin-to-pin wiring map for all units |
+| **WIRING.md** | `docs/` | Hardware wiring map for all units |
 | **ARCHITECTURE.md** | `docs/` | Full software architecture, nav stack, data flow |
 | **BUILD_GUIDE.md** | `docs/` | Toolchain setup, build commands, error reference |
 | **FLASH_GUIDE.md** | `docs/` | Flashing, port detection, first-boot procedure |

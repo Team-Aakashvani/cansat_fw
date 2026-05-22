@@ -96,12 +96,13 @@ I (xxx) I2CBus: I2C-1 ready (SDA=10 SCL=11 400kHz)
 I (xxx) main: Initialising sensors...
 I (xxx) BNO085: SHTP ready, version 4.x.x
 I (xxx) BMP585: ready, CHIP_ID=0x51
-I (xxx) main: Initialising LoRa link...
-I (xxx) LoRaLink: LoRa link ready (433MHz SF10 BW125 CR4/5)
+I (xxx) main: Initialising XBee link...
+I (xxx) XBeeLink: XBee link ready (UART 115200 baud)
 I (xxx) main: Running BIT...
 I (xxx) BIT: [BIT] IMU: PASS (|a|=9.82 m/s²)
 I (xxx) BIT: [BIT] BARO: PASS (P=101234.5 Pa T=28.3°C alt=-2.1m)
 I (xxx) BIT: [BIT] Power: PASS (V=7.41V I=0.120A P=0.89W)
+I (xxx) BIT: [BIT] XBee: PASS
 I (xxx) BIT: === BIT PASS (flags=0x00000000) ===
 I (xxx) main: All tasks spawned. Flight software running.
 ```
@@ -139,15 +140,15 @@ idf.py -p COM3 -b 921600 flash
 
 ## OTA Update (Over-The-Air)
 
-The partition table includes `ota_0` (3 MB). OTA is not yet implemented in v1.0 but the partition is reserved. To re-flash mid-campaign without USB access, implement `esp_ota_*` API calls in a future update.
+The partition table includes `ota_0` (3 MB). Use the `OTA` command via the XBee link to perform firmware updates in the field.
 
 ---
 
 ## Troubleshooting
-
-### `A fatal error occurred: Failed to connect to ESP32-S3`
-
-**Cause:** Board not in download mode, or wrong COM port.
+...
+- [ ] Voltage reads > 3.0 V (USB) or > 6.4 V (flight battery)
+- [ ] XBee: `XBee link ready` message appears
+- [ ] SD card: `Logging to /sdcard/CANSAT_0001.csv` (if SD inserted)
 **Fix:**
 1. Hold BOOT, tap RESET, release BOOT
 2. Try `idf.py -p COM3 --before no_reset flash`

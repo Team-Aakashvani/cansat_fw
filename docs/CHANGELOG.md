@@ -1,6 +1,6 @@
 # Changelog — CAN-7USAT 2026 Flight Software
 
-## v1.0.0 (2026-05-19) — Production Release
+## v1.0.0 (2026-05-19) — Flight Release
 
 ### Added
 

@@ -28,7 +28,7 @@ I (xxx) BIT: === BIT PASS (flags=0x00000000) ===
 | 1 | `BIT_BARO_ABSENT` | BMP585 not responding | YES — halts |
 | 2 | `BIT_POWER_ABSENT` | INA260 not responding | YES — halts |
 | 3 | `BIT_GNSS_NO_NMEA` | No NMEA from N-GS-01 in 2 s | No — logs warning |
-| 4 | `BIT_LORA_ABSENT` | SX1278 not detected | YES — halts |
+| 4 | `BIT_RADIO_ABSENT` | XBee not responding | YES — halts |
 | 5 | `BIT_SD_FAIL` | SD card not mounted | No — logs warning |
 | 6 | `BIT_NVS_FAIL` | NVS namespace error | No — uses defaults |
 | 7 | `BIT_IMU_SANITY` | \|accel\| outside 7.8–11.8 m/s² | No — warns |
@@ -126,7 +126,7 @@ I (xxx) NGPS01: GGA: lat=12.971600 lon=77.594600 alt=912.3m sats=7 fix=1
 - [ ] Coordinates match your actual location (±5 m)
 - [ ] `time_str` matches UTC time
 
-### 2.4 LoRa Self-Test
+### 2.4 XBee Self-Test
 
 **Using two boards (loopback):**
 
@@ -136,19 +136,12 @@ On the transmitting board, send a CX command from the GCS:
 ```
 Expected:
 ```
-I (xxx) LoRaLink: RX cmd type=1 arg='ON' RSSI=-45
+I (xxx) XBeeLink: RX cmd type=1 arg='ON' RSSI=-50
 I (xxx) CmdParser: CX → telemetry ON
 ```
 
-**Without a second board:**
-Check SX1278 version register:
-```
-I (xxx) SX1278: version=0x12 — OK
-```
-
 **Checks:**
-- [ ] `LoRa link ready` message in boot log
-- [ ] No `SX1278 init failed` error
+- [ ] `XBee link ready` message in boot log
 - [ ] Telemetry packets transmitted every 1 s (`TX[1] 89 bytes`)
 
 ### 2.5 Telemetry Format Verification
@@ -194,17 +187,17 @@ I (xxx) PowerMgr: Power status: 0 → 0 (V=7.42V SoC=87.5%)
 
 ## Stage 3 — Integration Test
 
-Assemble the full CanSat (sensors, battery, LoRa antenna, SD card). Run the ground station.
+Assemble the full CanSat (sensors, battery, XBee antenna, SD card). Run the ground station.
 
 ### 3.1 Ground Station Setup
 
-Minimum GCS setup: a second ESP32 or an SX1278 module connected to a PC running a serial monitor that prints raw LoRa packets.
+Minimum GCS setup: a second ESP32 with XBee or an XBee module connected to a PC via USB.
 
-**Recommended:** Use the [CAN-7USAT GCS software](https://cansat.in) or any LoRa receive tool at 433 MHz, SF10, BW125, CR4/5.
+**Recommended:** Use the [CAN-7USAT GCS software](https://cansat.in) or any serial terminal at 115200 baud.
 
 ### 3.2 Range Test
 
-- [ ] LoRa packets received at 50 m range (RSSI > −100 dBm)
+- [ ] XBee packets received at 50 m range (RSSI > −100 dBm)
 - [ ] Packet loss rate < 5% over 60 s at 50 m (= < 3 missed packets in 60)
 - [ ] GCS software plots telemetry in real time
 
@@ -245,7 +238,7 @@ Complete immediately before launch. Print this checklist.
 ### Hardware
 - [ ] Flight battery fully charged (measured voltage ≥ 7.2 V for 2S LiPo)
 - [ ] SD card formatted FAT32 and inserted
-- [ ] LoRa antenna connected (TX into open air without antenna WILL damage SX1278)
+- [ ] XBee antenna connected (TX into open air without antenna MAY damage radio)
 - [ ] Parachute packed and tether attached
 - [ ] Servo mechanism moves freely (servo_release → servo_home)
 - [ ] All I2C/SPI/UART wiring secured and strain-relieved
@@ -314,4 +307,4 @@ If the CanSat crashed or reset during flight due to a software panic:
 |------------|-------|
 | GNSS cold start 30–90 s | Power on 5 min before launch for warm start |
 | SD write lag | Flush every 5 s; last 5 s may be lost on hard impact landing |
-| LoRa range ≈ 5–10 km at 433 MHz SF10 | Sufficient for 1 km apogee |
+| XBee range ≈ 1–5 km LOS | Sufficient for 1 km apogee |

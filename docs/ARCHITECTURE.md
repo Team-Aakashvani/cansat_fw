@@ -78,7 +78,7 @@ cansat_fw/
 │   ├── main.cpp                   # app_main() + FC tasks (main_fc)
 │   ├── main_gcs.cpp               # GCS entry (main_gcs)
 │   ├── main_p4.cpp                # P4 entry (main_p4)
-│   ├── main_gcs_pin.cpp           # GCS pin definitions
+│   ├── main_gcs_extra.cpp         # GCS secondary definitions
 │   ├── system_init.cpp/.hpp       # Shared core init (NVS, logging)
 │   ├── Kconfig.projbuild          # Role selector (menuconfig)
 │   └── CMakeLists.txt             # Component registration

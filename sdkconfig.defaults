@@ -1,5 +1,5 @@
 # ===========================================================================
-# sdkconfig.defaults — ESP32-S3 WROOM-1 production defaults
+# sdkconfig.defaults — ESP32-S3 WROOM-1 release configuration
 # CAN-7USAT 2026 Flight Software
 # ===========================================================================
 
@@ -49,7 +49,7 @@ CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y   # ~2.76V threshold
 # Use UART0 for debug output during development
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
-# In production flight, set to WARN to minimise UART latency
+# In flight operation, set to WARN to minimise UART latency
 # CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 
 # ---- NVS ------------------------------------------------------------------
@@ -68,7 +68,7 @@ CONFIG_FATFS_MAX_LFN=255
 CONFIG_FATFS_CODEPAGE_437=y
 
 # ---- Console Output -------------------------------------------------------
-# Use the built-in USB Serial/JTAG Controller for production logs.
+# Use the built-in USB Serial/JTAG Controller for system logs.
 # This frees up UART0 for the P4 Media Coprocessor link.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y

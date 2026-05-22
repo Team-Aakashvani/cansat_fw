@@ -1,0 +1,1740 @@
+Restricted
+
+IN-SPACe CAN-7USAT India Student Competition
+2026 (3rd Edition): Mission Requirement &
+Competition Guidelines
+Doc.No.: IN-SPACe.CAN.MR.CG.01, IssueNo.:01, dated 24-03-2026
+
+Indian National Space Promotion and
+Authorization Center
+Antariksh Bhavan
+Bengaluru 560094
+1
+
+2
+
+IN- SPACe
+
+Indian National Space Promotion and
+Authorization Center
+Antariksh Bhavan
+Bengaluru 560094
+
+3
+
+MISSION REQUIREMENTS
+&
+PRELIMINARY DESIGN REVIEW DOCUMENTATION
+GUIDELINES
+Name and Designation
+
+Date
+
+Prepared by
+
+Team CAN-7USAT
+
+March 2026
+
+Reviewed by
+
+Organizing Committee
+
+March 2026
+
+Approved by
+
+Director, Promotion
+Directorate, IN-SPACe
+
+March 2026
+
+4
+
+Signature
+
+SUMMARY
+CAN-7USAT students’ competitions are being conducted worldwide including in India. It
+is noticed that Indian students are participating and winning laurels for the nation. Taking cue from
+this IN-SPACe has decided to conduct IN-SPACe CAN-7USAT India Student Competition from
+2023-24. The first edition of IN-SPACe CAN-7USAT India student competition was conducted
+on April 15-17, 2024. The second edition of the same was organized in October 2025 at
+Kushinagar, Uttar Pradesh. This document addresses the registration guidelines, mission
+requirements for the 3rd edition of IN-SPACe CAN-7USAT India students’ competition 2026. The
+preliminary design review documentation guidelines are also provided.
+NB: While due care is taken to prepare this document. The decision of organizers will be final in
+case of any discrepancies etc.
+
+5
+
+TABLE OF CONTENTS
+Table of Contents ............................................................................................................................ 6
+1
+Introduction .......................................................................................................................... 8
+2
+Registration Guidelines ........................................................................................................ 8
+3
+Competition Timeline ........................................................................................................ 12
+4
+Mission Requirements ....................................................................................................... 12
+3.1 Mission Requirement for CAN-7USAT India 2026 ........................................................... 12
+3.2 Indicative Optional Objectives (extra points will be given for each case) ......................... 13
+5
+
+6
+
+7
+
+Mission objectives & requirements ................................................................................... 13
+5.1 Basic Requirements ........................................................................................................ 13
+5.2
+
+Structure Requirements .................................................................................................. 14
+
+5.3
+
+Power Requirements ...................................................................................................... 14
+
+5.4
+
+Descent & Recovery requirements ................................................................................. 15
+
+Communication Requirements........................................................................................... 15
+6.1 Ground Station ............................................................................................................... 16
+6.2
+
+Flight Software ............................................................................................................... 17
+
+6.3
+
+Telemetry ....................................................................................................................... 17
+
+Preliminary Design Review Documentation Guidelines ................................................... 19
+7.1 Team Composition and management ............................................................................. 19
+7.2
+
+Mission Overview .......................................................................................................... 20
+
+7.3
+
+Subsystem Details: ......................................................................................................... 21
+
+7.4
+
+Mechanical Subsystem ................................................................................................... 21
+
+7.5
+
+Communication and Data Handling Subsystem............................................................. 22
+
+7.6
+
+Electrical Power Subsystem ........................................................................................... 22
+
+7.7
+
+Sensor Subsystem........................................................................................................... 22
+
+8
+CAN-7USAT Algorithm Description ................................................................................ 23
+9
+Ground station.................................................................................................................... 23
+10
+CAN-7USAT Integration and Testing ............................................................................... 24
+11
+Mission Operations & Analysis ......................................................................................... 25
+12
+Comprehensive Design Review ......................................................................................... 25
+13
+Requirements Compliance ................................................................................................. 30
+14
+Code of Ethics and Standards ............................................................................................ 33
+15
+Additional Information ...................................................................................................... 33
+16
+Conclusion ......................................................................................................................... 33
+APPENDIX-A
+35
+
+6
+
+7
+
+1 INTRODUCTION
+Encouraged by the participation and success of the IN-SPACe CAN-7USAT India Student
+Competition 2023-24, and 2024-25, IN-SPACe is pleased to announce 3 rd edition of IN-SPACe
+CAN-7USAT India Student competition 2026 in association with Srinarayani Science
+Development Foundation, Kushinagar. This competition is being organized to inculcate the space
+science and technology temperament among the student community. This competition involves
+the design, development & launch of a CAN sized satellite to an altitude of 1000 meters above the
+launch site. The competition will also help to create a wide scale ecosystem for Swadeshi Space
+activities in the country and bridge the industry academia skillset gap thereby enabling the future
+space force creation for the AatmaNirbhar Bharat.
+This document describes the mission requirements and preliminary design review documentation
+guidelines. The optional indicative objectives are provided with passive and/or active control
+system. Teams are free to select any other novel techniques to demonstrate the same. The
+communication, telemetry, flight software structure, power, descent and recovery requirements are
+provided.
+The guidelines for team composition & management, communication and data handling, electrical
+power system and sensor subsystems etc. are enumerated. The details required for CAN-7USAT
+algorithm, ground station, integration and testing and requirement compliance matrix is provided.
+The code of ethics and standards that needs to be followed by teams is listed.
+The teams are being assigned a unique team identification number. Please use it in all the
+correspondences with the organizers. All the correspondence should be through faculty advisor.
+
+2 REGISTRATION GUIDELINES
+a) The competition is open to all undergraduate students enrolled in Indian colleges/universities.
+b) Applicants shall apply for the competition in teams and the team applying for the competition
+shall have a minimum of 5 members and shall not exceed 8 members.
+c) Only ONE team is allowed per college/university. If the college is affiliated to a university one
+application from each of these affiliated colleges is allowed.
+d) Additionally, the Undergraduate Student team can have ONE faculty coordinator/advisor and
+up to TWO mentors who could be the graduate students enrolled in the university’s higher
+education courses or faculty or the alumni of the institution. If there is no mentor than the
+faculty coordinator/advisor shall act as mentor.
+The role of the faculty coordinator/advisor is to:
+● Act as a point of contact for the team, both with the university and IN-SPACe
+● Assist teams with logistics such as arranging conference rooms, lab resources etc.
+● Providing general guidance throughout the competition.
+8
+
+● The faculty advisor shall not make design decisions or direct recommendations or
+participate in more than an oversight role during reviews.
+The role of the mentor is to:
+● Act as a liaison between the team and the competition committee. The mentor will be
+responsible for scheduling all competition reviews and coordinating all
+communications with the team. Mentors are also responsible for tracking the team’s
+progress throughout the competition.
+● Team mentors shall be available to answer questions and provide general guidance.
+● The mentor shall not provide design recommendations.
+e) The team applying for the competition must provide an approval letter from the institution
+consisting of the details of all the team members including the name, Institute ID, course
+enrolled in branch, year of graduation and the role in the Team (roles can be defined as per the
+tasks assigned to the team members) on the institute’s letterhead duly signed by the head of
+the institution. The scanned copy of the letter shall be attached with the registration form.
+
+Last Date to Apply: April 30 2026
+f) In case of any changes in the team after the registration, an official request shall be made by
+the faculty coordinator/advisor regarding the same to director-pd@inspace.gov.in with a
+subject line: Team Change Request IN-SPACe CAN-7USAT India Student Competition 2026.
+No change shall be permitted post PDR.
+g) This competition is only for college/university students. A separate announcement shall be
+made for providing launch opportunity to NGEs/ societies/ clubs etc.
+h) Additional details:
+i.
+
+Each team has to register on the IN-SPACe Digital Platform (IDP) www.inspace.gov.in
+
+ii.
+
+The payment of non-refundable Registration fee of Rs.10,000.00/- (Rupees Ten
+thousand only) shall be made to SSDF. You will be required to enter the transaction ID
+viz. UTR No. etc as the proof of payment while registering at IDP. The payment is to
+be made to the following account:
+ShriNarayani Science Development Foundation
+A/c 50200118890683
+Branch Paedlaeganj Gorakhpur
+IFSC HDFC0010007
+Bank HDFC Bank Ltd
+
+iii.
+
+After the successful registration and screening, the participants will be informed for
+submitting the Preliminary Design Review (PDR) Document as per the mission
+requirement guidelines provided in this document.
+
+iv.
+
+The teams can start marketing pitch to attract sponsorship.
+
+9
+
+v.
+
+All registered teams will then present their preliminary design review (PDR) to the
+jury.
+
+vi.
+
+After the qualification at PDR stage teams, the qualified teams will have to make
+payment of non-refundable fee of Rs. 15,000.00/-(Rupees Fifteen Thousand Only) at
+the time of Comprehensive Design Review(CDR) document submission.
+
+vii.
+
+The participants will be required to submit CDR document within a specified period.
+The maximum cost of the CAN-7USAT cannot exceed Rs. 1,00,000/- (Rupees One
+Lakh Only). The cost includes the material, component and facility usage cost. The
+cost break up shall be presented during the CDR. The usage of make in India
+components will be given due weightage during the evaluation.
+
+viii.
+
+The CDR qualified team shall be permitted to fly their CAN-7USAT, after
+mission/flight readiness review. The further rounds of review and will be
+communicated in due course. The organizing committee can introduce college/lab
+visits at any stage of the competition.
+
+ix.
+
+The teams are advised to approach sponsors and will be allowed to adopt and sponsor
+a team {(max. Rs. 2,00,000/- (Rupees Two Lakhs Only) excluding travel} for which
+the cost break-up shall be presented along with Comprehensive Design Review. The
+qualified teams’ details will be displayed on the IN-SPACe website.
+
+x.
+
+After the CDR the jury will check the CAN-7USATs for the flight readiness during the
+Flight Readiness Review and launch dates will be given to the teams.
+
+xi.
+
+The teams will be required to make the payment for the launcher directly to the
+identified launch agency by IN-SPACe. The further details of the cost will be shared
+during the course of the competition.
+
+xii.
+
+Further guidelines and evaluation criteria will be provided in due course.
+
+xiii.
+
+In the final stage, CAN-7USATs will be launched and after the flight review of the
+CAN-7USATs winners will be decided.
+
+ The tentative timeline for the CAN-7USAT India student competition is provided
+below:
+S.No.
+
+Activity
+
+Start Date
+
+End Date
+
+1.
+
+Registration along-with fee for 24-03-2026
+the competition
+
+30-04-2026
+
+2.
+
+Evaluation and screening
+
+01-05-2026
+
+15-05-2026
+
+3.
+
+PDR Document Submission
+
+16-05-2026
+
+30-05-2026
+
+4.
+
+Preliminary Design
+Completion by Jury
+
+Review 01-06-2026
+
+30-06-2026
+
+5.
+
+Comprehensive Design Review 01-07-2026
+
+31-07-2026
+
+10
+
+Document Submission alongwith applicable fees
+6.
+
+Comprehensive Design Review 01-08-2026
+Completion
+
+31-08-2026
+
+7.
+
+Flight Readiness Review
+
+01-09-2026
+
+15-10-2026
+
+8.
+
+Launch
+window:
+Final 16-10-2026
+Competition,
+Post
+Flight
+Review and Results Declaration
+
+30-11-2026
+
+11
+
+3 COMPETITION TIMELINE
+The competition shall be conducted in the seven phases which are as follows:
+
+Phase
+
+Activity
+
+Outcome
+
+It is the registration phase where the teams need to be
+Phase 1 registered as per the guidelines. The guidelines for the
+registration have been provided as annexure 1.
+Submission of Preliminary Design Review (PDR)
+Phase 2 document followed by a presentation to the evaluation
+committee.
+PDR qualified teams will present Comprehensive
+Design Review (CDR) document followed by a
+presentation
+to
+the
+evaluation
+committee.
+Phase 3
+(During this phase PDR qualified teams shall finalize
+the design, initiate the components and material
+procurement and start the realization of CAN-7USAT)
+During this phase CAN-7USAT must be ready for the
+Phase 4 launch and teams shall present their CAN-7USAT for
+flight readiness review (FRR) and launch clearance.
+It is the day of the launch where the teams will arrive
+Phase 5 at the launch site and the CAN-7USATs will be
+launched on the rockets provided by the organizers.
+It is the Post Flight Review (PFR) the teams shall make
+Phase 6 presentation to the jury the flight results and the data
+analysis.
+
+Team
+Registration
+Selection
+
+&
+
+Team
+Evaluation
+&
+selection for next phase.
+Assessment
+of
+CAN7USAT designs & selection
+for next phase
+Flight readiness check &
+clearance for launch
+Launch
+&
+Evaluation
+
+Mission
+
+Final
+Evaluation
+&
+announcement of winners
+
+The detailed guidelines for CDR, FRR and PFR evaluation and timeline shall be notified in
+due course.
+
+4 MISSION REQUIREMENTS
+3.1 MISSION REQUIREMENT FOR CAN-7USAT INDIA 2026
+Design a CAN-7USAT weighing under 1 Kg (+/- 0.050 kg), with dimensions not more
+than 0.15 m diameter and 0.40 m height. The objectives for the 2026 competition will be:
+
+
+CAN-7USAT descent control system that shall open at an altitude of 600 m.
+
+
+
+Desired additional objective: Precision, Controlled flight and Landing Systems that
+shall demonstrate controlled flight and targeted landing near to the launch pad.
+CAN-7USATs will be launched to an altitude of 1000 (+/- 100) m from the ground level and above
+the launch site & deployed near the peak altitude. During the ejection from the rocket, orientation
+of the CAN-7USAT is not controlled. The CAN-7USAT must remain intact during the course of
+the entire mission and send the data to the ground station through a telemetry link.
+
+12
+
+3.2 INDICATIVE OPTIONAL OBJECTIVES (EXTRA POINTS WILL BE GIVEN FOR
+EACH CASE)
+
+Few indicative optional objectives are listed below. However, teams are encouraged to propose
+novel techniques that they can demonstrate within the specified mass, power and budget
+constraints.
+i.
+
+Novel descent trajectory control, Innovative materials,
+
+ii.
+
+Additional innovative sensors and communication systems
+
+iii.
+
+Provision of video capture from separation till final touch down
+
+iv.
+
+Innovative controlled flight and targeted landing mechanisms through actuators
+with green propulsion only
+
+v.
+
+Innovative Quality and reliability analysis methodologies.
+
+5 MISSION OBJECTIVES & REQUIREMENTS
+5.1
+
+BASIC REQUIREMENTS
+i.
+
+Total mass of the CAN-7USAT shall be under 1.0 Kg (+/- 0.050 Kg)
+
+ii.
+
+CAN-7USAT shall fit in a cylindrical body of 0.15 m diameter x 0.40 m height.
+Tolerances are to be included to facilitate container deployment from the rocket
+fairing.
+
+iii.
+
+Teams are free to use any design process and material for the cylinder development.
+
+iv.
+
+Any sharp edges on the container body shall be avoided as it can cause problems
+during the CAN-7USAT ejection from the rocket.
+
+v.
+
+For ease in location of the CAN-7USAT, the color of the CAN-7USAT body shall
+be painted with fluorescent colors i.e., pink, red or orange, and shall embody the
+Indian flag.
+
+vi.
+
+Rocket Airframe will not be allowed to be used as a part of any CAN-7USAT
+operation.
+
+vii.
+
+Additional weightage will be given to the MADE IN INDIA components in the
+making of CAN-7USAT.
+
+viii.
+
+The Global Navigation Satellite System (GNSS) sensor that includes Navigation
+by Indian Constellation (NavIC) will be given extra weightage.
+
+13
+
+5.2
+
+5.3
+
+ix.
+
+The CAN-7USAT shall consist of necessary sensors to provide the following
+mandatory Real-time datasets: Position data, altitude, pressure, temperature,
+orientation data, power data & system status.
+
+x.
+
+The data shall be displayed in near real-time on the ground station User
+Interface/Software. Teams are free to use any design to build their own user
+interface.
+
+xi.
+
+CAN-7USAT software shall have provision to record the data and save it into an
+onboard SD card, in case of telemetry connection loss during flight.
+
+STRUCTURE REQUIREMENTS
+i.
+
+All electronics shall be enclosed and shielded from the environment. No electronics
+can be exposed except for sensors. There must be a structural enclosure.
+
+ii.
+
+CAN-7USAT structure shall be built to survive 15 Gs of launch acceleration & 30
+Gs of shock.
+
+iii.
+
+Electronic circuit boards must be hard mounted using proper mounts such as
+standoffs and screws. High-performance adhesives can also be used.
+
+iv.
+
+Team number, email address and phone number must be placed on the structure in
+English, Hindi and the regional language of the launch state to aid in recovery.
+
+v.
+
+An audio beacon shall be installed on CAN-7USAT as a recovery assist. It may be
+powered after landing or operate continuously. The audio beacon must have a
+minimum sound pressure level of 92 dB, unobstructed.
+
+POWER REQUIREMENTS
+i.
+
+The CAN-7USAT shall have an external power switch with an indicator light
+or sound for being turned on or off, in order to avoid the disassembling of
+CAN-7USATs on the launch pad.
+
+ii.
+
+The CAN-7USAT shall have a battery capacity to support up to 2 hours of wait on
+the launch pad with additional time for flight operations.
+
+iii.
+
+The battery source may be alkaline, Ni-Cad, Ni-MH or Lithium ion. Lithium
+polymer batteries are not allowed. Lithium cells must be manufactured with a metal
+package similar to 18650 cells.
+
+iv.
+
+An easily accessible battery compartment must be included allowing batteries to be
+installed or removed in less than a minute and not require total disassembly of the
+CAN-7USAT.
+
+v.
+
+Spring contacts shall not be used for making electrical connections to batteries.
+Care must be taken as the shock forces can cause momentary disconnects of power.
+14
+
+5.4
+
+DESCENT & RECOVERY REQUIREMENTS
+i.
+
+The CAN-7USAT shall contain a total of 2 descent control mechanisms, to be used
+at different stages while descent.
+
+ii.
+
+Primary descent control mechanism shall be a parachute while the secondary
+descent control mechanism shall be decided by the teams. Few examples for the
+secondary descent control mechanism and targeted landing are: secondary
+parachute/streamer/glider/rotor mechanism etc.
+
+iii.
+
+CAN-7USAT shall immediately deploy the primary parachute after ejection from
+the rocket.
+
+iv.
+
+The primary parachute shall be connected to the outer body of the CAN-7USAT
+and no ejection mechanism shall be attached to it.
+
+v.
+
+The descent rate of the primary parachute shall be less than 20 m/s (variation within
+±5m/s).
+
+vi.
+
+The secondary descent control mechanism shall activate at an altitude of 600 m
+(±10 m) to further decrease the descent rate of the CAN-7USAT to 1 to 3m/s.
+
+vii.
+
+The descent control system shall not use any hazardous chemical-based explosive
+or pyrotechnic devices. However, green propulsion such as pressurized gas etc
+is allowed if being used under the same weight constraint.
+
+viii.
+
+CAN-7USAT shall stabilize itself during the descent using the Mechanical
+Gyroscopic wheels.
+
+ix.
+
+The descent control mechanism & all the attached components in CAN-7USAT
+shall survive 30 Gs of shock at the time of launch and separation.
+
+x.
+
+All the electronic components shall be enclosed and shielded from the environment
+with the exception of sensors.
+
+6 COMMUNICATION REQUIREMENTS
+For the smooth launch operations, the following communication requirements should be
+incorporated and it shall be strictly enforced during the competition to avoid interference.
+i.
+
+The CAN-7USAT communications radio shall be the XBEE radio series 1/2/pro or
+LORA WAN.
+
+ii.
+
+The LORA WAN shall have their NETID/PANID set to the team number and
+declared at CDR stage.
+
+iii.
+
+The XBEE radio shall not use the broadcast mode.
+15
+
+6.1
+
+iv.
+
+The XBEE radio can operate in any mode as long as it does not interfere with other
+XBEE radios.
+
+v.
+
+A provision to switch-on and switch-off telemetry of CAN-7USAT to be
+incorporated through RF Command.
+
+vi.
+
+The teams will be required to present the radio interference mitigation plan and
+strategy during the PDR stage. They will not be permitted to launch in case of any
+interference.
+
+GROUND STATION
+i.
+
+Each team shall develop and use their own ground station. All telemetry shall be
+displayed in near real-time during launch and descent. All telemetry shall be
+displayed in international system of units i.e., SI system. Teams shall plot data in
+real-time during flight.
+
+ii.
+
+The ground station shall command the CAN-7USAT to start transmitting telemetry
+prior to launch.
+
+iii.
+
+The ground control station antenna shall be elevated from ground level to ensure
+adequate coverage and range.
+
+iv.
+
+Stability of the ground station must be ensured.
+
+v.
+
+The CAN-7USAT shall not transmit telemetry until commanded by the team.
+Command can be executed while the CAN-7USAT is in the rocket on the launch
+pad.
+
+vi.
+
+The ground station shall be able to command the CAN-7USAT to calibrate gyros,
+barometric altitude, accelerometer to command the parameters to zero as the CAN7USAT sits on the launch pad.
+
+vii.
+
+The ground station shall generate .csv files of all sensor data as specified in the
+Telemetry Requirements section.
+
+viii.
+
+Telemetry shall include mission time with one second or better resolution.
+
+ix.
+
+In case of processor reset, the mission clock/time stamp & system state shall be
+maintained.
+
+x.
+
+Teams shall plot each telemetry data field in real-time during flight.
+
+xi.
+
+The ground station shall include one laptop computer with a minimum of two hours
+of battery operation, XBEE radio/LORA WAN and an antenna mounted on a
+tripod.
+
+16
+
+xii.
+
+6.2
+
+6.3
+
+The ground station must be portable so the team can be positioned at the ground
+station operation site along the flight line and if required the team can also move to
+a different location, in case of distant landing location, in order to locate the CAN7USAT.
+
+FLIGHT SOFTWARE
+i.
+
+The flight software shall maintain and telemeter an indicator of the CAN-7USAT
+flight software state. An example set of states is 0 (BOOT), 1 (TEST_MODE), 2
+(LAUNCH_PAD), 3 (ASCENT), 4 (ROCKET_DEPLOY), 5 (DESCENT), 6
+(AEROBREAK_RELEASE), and 7 (IMPACT).
+
+ii.
+
+In the event of a processor reset during the mission, the flight software shall be able
+to determine the correct state.
+
+iii.
+
+The states shall be described in the review presentation by each team.
+
+TELEMETRY
+i.
+
+Upon powering up and commanding, the CAN-7USAT shall collect the required
+telemetry at a 1 Hz sample rate or better. The telemetry data shall be transmitted
+with ASCII comma-separated fields followed by a carriage return in the following
+format:
+<TEAM
+ID>,<TIME
+STAMPING>,<PACKET
+COUNT>,<ALTITUDE>,
+<PRESSURE>,
+<TEMP>,<VOLTAGE>,<GNSS
+TIME>,<GNSS
+LATITUDE>,<GNSS
+LONGITUDE>,
+<GNSS
+ALTITUDE>,<GNSS
+SATS>,<ACCELEROMETER DATA>, <GYRO SPIN RATE>, <FLIGHT
+SOFTWARE STATE>,<ANY OPTIONAL DATA>
+
+ii.
+
+The received telemetry for the entire mission shall be saved on the ground station
+computer as a comma-separated value (.csv) file that will be examined by the
+competition judges. Teams will provide the file to the judges immediately after the
+launch operations via USB drive. The .csv file shall include headers specifying each
+field of data.
+
+iii.
+
+The telemetry parameters display format with resolution needs to be provided as
+given in the table below. The telemetry data file shall be named as follows:
+A. Flight_<TEAM_ID>.csv. It is recommended the ground software produce this
+file, with the correct name, easily from the ground system user interface.
+
+S.
+No.
+
+TM Parameter
+
+Function
+
+Resolution /Format
+
+17
+
+1.
+
+<TEAM ID>
+
+Team Number
+
+2026-IN-SPACeCAN-7USAT-XXX
+
+2.
+
+<TIME STAMPING>
+
+Time since the initial power
+
+3.
+
+<PACKET COUNT>
+
+Count of transmitted packets
+
+4.
+
+<ALTITUDE>
+
+Altitude in units of meters and must
+
+Seconds
+0.1 meters
+
+be relative to ground
+5.
+
+<PRESSURE>
+
+Measurement of atmospheric
+
+1 pascal
+
+pressure
+6.
+
+<TEMP>
+
+Temperature in Celsius
+
+0.1 oC
+
+7.
+
+<VOLTAGE>
+
+Voltage of the CAN-7USAT power
+
+0.01 Volts
+
+bus
+8.
+
+<GNSS TIME>
+
+Time generated by the GNSS
+
+Seconds
+
+receiver
+9.
+
+<GNSS LATITUDE>
+
+10. <GNSS
+LONGITUDE>
+11. <GNSS ALTITUDE>
+
+Latitude generated by the GNSS
+receiver
+
+0.0001 degrees
+
+Latitude generated by the GNSS
+
+0.0001 degrees
+
+receiver
+Altitude generated by the GNSS
+
+0.1 meters
+
+receiver
+12. <GNSS SATS>
+
+GNSS satellites connected
+
+13. <ACCELEROMETER Data received from the gyroscopic
+DATA>
+
+integer number
+m/s2
+
+sensor i.e acceleration and roll &
+pitch parameters
+
+14. <GYRO SPIN
+RATE>
+15. <FLIGHT
+
+Spin rate of Mechanical Gyro wrt.
+
+deg/s
+
+CAN-7USAT
+Operating state of the software
+
+SOFTWARE
+
+(boot, idle, launch
+detect, deploy, etc.)
+
+STATE>
+16. <OPTIONAL DATA> Any data coming from the optional
+mission objectives
+B. Additional data fields may be appended after the required fields as determined
+necessary by the team's design
+18
+
+C. It is suggested that teams make use of onboard data storage. Only the
+transmitted telemetry is graded, however, the backup data can be used when
+completing the Post Flight Review.
+
+7 PRELIMINARY DESIGN REVIEW DOCUMENTATION
+GUIDELINES
+Preliminary Design Review (PDR) - is a detailed design review of the system to ensure that
+the system can proceed into detailed design, and can meet the mass, dimensional, budget,
+schedule and other specified constraints for the CAN-7USAT India 2026.
+
+It shall consist of:
+i.
+
+Details about the CAN-7USAT mission requirements and how the team plans to
+incorporate it.
+
+ii.
+
+Details about derived and allocated system-level requirements
+
+iii.
+
+Details about the operational aspects of the CAN-7USAT.
+
+iv.
+
+Detailed overview of the preliminary design that meets the mission's specified
+requirements.
+
+v.
+
+Details about the identified components, subsystems, processes, simulation results
+or any other details to support the preliminary design.
+
+vi.
+
+Details of the identified testing criteria to support or finalize the preliminary design.
+
+vii.
+
+Budget details
+
+viii.
+
+Development schedule of the CAN-7USAT
+
+The PDR document along with the presentation should be submitted as per the guidelines
+mentioned below. The team leader is responsible to present the slides in the specified format.
+The Presentation time is limited to 10 minutes. Anything longer than that will lead to deduction
+of points. In case any acronyms are used, it has to be mentioned at the beginning of both the
+doc and PPT file. Any reference used is to be mentioned in Annexures reference section.
+The following are the points to be taken care of while developing the PDR document:
+7.1
+
+TEAM COMPOSITION AND MANAGEMENT
+This should include the entire team detail i.e., course, graduation detail, institute, area of
+specialization (if any), and role in the team.
+
+19
+
+The team shall assign a team leader who is responsible for giving up the presentation. The
+teams are required to mention the entire expenses incurred during the entire CAN-7USAT
+development. The team is required to provide the bill of material (BOM) of their entire
+purchase.
+Make a table of financials containing BOM and other costings which should include:
+● Cost of each component
+● Estimate vs Actual cost with any deviation if any
+● Any second-hand hardware
+● Ground station
+● Parachute
+● Designing
+● Prototyping
+● Testing
+● Fabrication
+● Contingencies
+● Any other relevant cost
+Any source of sponsors can also be mentioned in this section
+NOTE: IN-SPACe DOES NOT PROVIDE ANY KIND OF PROJECT FUNDING
+SUPPORT
+A project milestone chart showing breakup of various activities like task start and stop
+dates and durations shall be presented. The purpose of the project timeline chart is to keep
+things on track and monitor the progress. Periodic update meetings are assumed to be
+scheduled to evaluate the team’s progress.
+7.2
+
+MISSION OVERVIEW
+Mission overview should provide the overall mission objective. This should include
+all the primary and the secondary/add-on objectives the team is looking for.
+Provide an overview of all system-level requirements. Any other external support taken
+from the facilities apart from the participating institute needs to be mentioned here.
+The system overview should cover all the design traits taken care while at development
+stage. Include diagrams, tables, and demonstration results where the need arises.
+20
+
+The System Overview presentation should include:
+● CAN-7USAT configuration
+● Major components
+● Engineering drawings
+● Launch and descent strategy
+● Post-launch recovery
+● Data retrieving and Analysis
+7.3
+
+SUBSYSTEM DETAILS:
+i.
+
+Payload Subsystem:
+
+This should include a detailed design of the payload i.e. main & optional objectives of
+the competition, its electrical & mechanical interfaces, deployment mechanism and
+specifications. What were the design constraints team faced keeping in view of the Mass,
+power and volume budget? Any trade-off while considering the design. Any add-on sensor
+the team has put on board should be mentioned in detail.
+ii.
+
+Housekeeping Subsystem
+The housing subsystem contains all the necessary sensors, actuators, attitude controls,
+power system, communication systems etc. just like a satellite Bus.
+The CAN-7USAT housing contains the following subsystems:
+A. Mechanical Subsystem
+B. Communication and Data Handling Subsystem
+C. Electrical Power Subsystem
+D. Sensor Systems
+
+7.4
+
+MECHANICAL SUBSYSTEM
+
+The mechanical subsystem should Include all major structural components, container
+mechanical configurations, electronic mounting, housing, material selection and interface
+definitions, thermal management etc.
+The Key constraints in mechanical designs of CAN-7USAT hardware and component
+selection should be mentioned in detail. Any major trade-off should be mentioned separately.
+
+21
+
+A detailed explanation of the CAN-7USAT hardware shall be provided including the
+following points:
+● Design & Simulations
+● Methodology
+● Placement of the various subsystems in the container
+The team should clearly mention the Mass of payload, container, sensors other than
+payload, parachute, and any other component used.
+7.5
+
+COMMUNICATION AND DATA HANDLING SUBSYSTEM
+
+The Communication and Data Handling Subsystem should mention clearly the TxRx
+antenna design & details, link margin, Boot time, Processor type, data interfaces, memory slots,
+CAN-7USAT real-time clock, antenna material, XBEE radio selection, transmission control,
+backup in case of transmission loss, data format.
+
+7.6
+
+ELECTRICAL POWER SUBSYSTEM
+
+The Electrical Power Subsystem should include schematic showing power connections that
+includes all power sources, resistor arrangements and all major components. The CAN-7USAT
+should have an external switch.
+Note: Use of Lithium Polymer batteries is prohibited.
+All types of connections and mounting need to be shown clearly. Describe the power tradeoff and selection. The kind of connection done (parallel or series) needs to be explained in details.
+The Power budget should include:
+● Energy Balance
+● Power consumption of each component/subsystem
+● The total power consumed
+7.7
+
+SENSOR SUBSYSTEM
+
+The CAN-7USAT Sensor subsystem details should include a summary of all the sensors selected
+and the purpose for which these sensors are being used. Detailed information like interfaces,
+resolution, weight, cost, reason of selection of each of the following sensors is also required:
+●
+
+GNSS Sensor
+
+●
+
+Altimetry
+22
+
+●
+
+Pressure
+
+●
+
+Temperature
+
+●
+
+Gyro sensor (Orientation/Acceleration data)
+
+●
+
+Power Status
+
+●
+
+Any other sensor
+
+The team is required to clearly mention any trade-off while sensors selection power requirements
+and other supporting documents.
+
+8 CAN-7USAT ALGORITHM DESCRIPTION
+This section should include the details of functional requirements and mathematical formulations
+used in development of the CAN-7USAT software. The CAN-7USAT algorithm should be
+described in the form of a flow chart. The software change log should be maintained using standard
+software packages. This should also describe basic software architecture, programming language
+used, development environment and brief summary of the software tasks.
+The following details should be included in the document viz.
+● Software sequencing timing diagram
+● Sampling rate or processor cycle time used for execution of various tasks
+● Telemetry and Telecommand details
+● Data storage and Handling
+● Software reset loop
+● Simulation mode strategy
+● Test methodology
+● Proto version testing details
+
+9 GROUND STATION
+The ground station includes a laptop, antenna, power supply etc. The ground station is
+supposed to remain ON at the time of launch for real time data collection and processing.
+However, the following points are needed to be considered and mentioned in the presentation:
+● Ground station power supply and duration of operation
+● Antenna pattern
+23
+
+● Antenna type
+● Telemetry display
+● Command software and interfaces
+● Real-time data collection scheme
+● Last data command at console display
+● User interface for real-time data collection
+● Describe in simulation mode how the ground system transmits the commands and
+uploads the data.
+● Ground software design for the transmitter to submit telemetry packets
+● CAN-7USAT Sensors & Payload telemetry
+● Libraries used
+● Communication test plans
+● The file format should be .csv for the data saved
+
+10 CAN-7USAT INTEGRATION AND TESTING
+Once all the subsystem level design and development are complete, this is followed by
+CAN-7USAT integration. The goal here is to understand each team’s methodology used for
+the integration of the module and make it a working system.
+The following tests are to be performed while integration:
+● Subsystem test plans
+○ Payload and associated Sensors
+○ Mechanical Structure
+○ Command and Data Handling
+○ Power Supply
+○ Ground Station
+○ CAN-7USAT Algorithm
+● Drop Test
+● Thermal test
+24
+
+● Vibration test
+● Housing Fit check test
+● Integrated level functional test plans
+● Environmental test plans
+● Simulation test plans
+● Parachute Deployment test
+● Polarity test, if required to verify sensor polarity definitions and conventions
+
+11 MISSION OPERATIONS & ANALYSIS
+The mission operation and analysis include a detailed explanation of the sequence of activities
+which are to be performed on launch date:
+● Arrival at the launch site
+● CAN-7USAT recovery mechanism
+● Data analysis
+It should also include:
+● Mission sequence of events
+● Antenna design, development and ground station setup
+● CAN-7USAT assembly and testing
+● Any color-coding team has done
+
+12 COMPREHENSIVE DESIGN REVIEW
+Comprehensive Design Review is a comprehensive document which ensures how the final
+product (here CAN-7USAT) would look like along with detailed subsystem level analysis. The
+CDR is a multi-disciplinary document providing broad guidelines for CAN-7USAT fabrication,
+testing etc. The CDR must contain the details of all subsystems, viz the components of the
+subsystems, their configuration and functionality. Testing philosophy and plan must be worked
+out. Test results for characterization and evaluation of the components/subsystems should be
+carried out and presented to committee for assessment. Teams can expect campus visits by
+organizers for assessing the progress at any stage of the competition. The visits shall be
+coordinated in consultation with faculty advisor.
+
+25
+
+During the CAN-7USAT integration stage the teams shall ensure that they have thoroughly tested
+each and every subsystem and will be required to produce the test results during the review.
+A successful CDR determines that the subsystem requirements, subsystem design & analysis,
+test results and evaluation is satisfactory to the objectives of the competition.
+After the successful completion of CDR, the teams should prepare themselves for the CAN7USAT FRR/PSR followed by the CAN-7USAT launch.
+
+COMPREHENSIVE DESIGN REVIEW OBJECTIVES
+During the PDR stage teams have been evaluated to assess their understanding in terms of
+technical aspects, systems engineering, innovation and skills requirements. The next stage of the
+CAN-7USAT competition is Comprehensive Design review (CDR). The main objectives of the
+CDR are to assess:
+a) the response to suggestion made by jury during the PDR
+b) final design implementation
+c) mechanical, electronics and various interfaces
+d) test results and validation of various subsystems of CAN-7USAT
+e) structural simulation as well as CG MI computation
+f) RF link margin and antenna characterization (both On-board and Ground systems)
+g) the power requirements and battery selection
+h) quality and qualification plan
+i) various failure modes and analysis
+j) mission display
+k) mission simulations demonstrating the expected performance
+l) Ground Station Configuration & software
+
+KEY REQUIREMENTS
+The basic requirements have been outlined in Mission Requirement & Preliminary Design
+Review Documentation Guidelines. Based on the PDR review few more requirements emerged,
+which are suggested to teams to address and implement in the CAN-7USAT:
+a) The axis of CAN-7USAT are defined as in Fig. 1. In the figure yaw (XC) axis is pointing
+towards the Earth, Roll (YC) axis is into the page and Pitch (ZC) completes the right handed
+triad.
+b) The axis definition of launcher with CAN-7USAT mounted is shown in Fig. 2. In the figure
+roll (YL) axis is pointing upward along the nosecone, pitch (- Z L) axis is into the page and
+yaw (ZL) completes the right-handed triad. Please note that CAN-7USAT negative yaw
+axis (-XC) will be aligned to the launcher roll (YL) axis.
+26
+
+c) Teams are required to present detailed specifications of all the sub-system components etc.
+d) Teams are suggested to mount GNSS antenna in CAN-7USAT such that it should have
+clear FOV towards zenith (with an angle) for GNSS signals and other antennas towards
+ground for TM & TC i.e., along yaw axis. (refer Appendix-A) for further details)
+e) It is suggested that RF transparency to be ensured while selecting the structural material
+f) During the second descent control mechanism activation, teams must ensure that there is
+no entanglement due to first descent control mechanism
+g) Selection of battery (‘s) should be as per the CAN-7USAT power requirement.
+
+FIG. 1: CAN-7USAT AXIS DEFINITION
+
+27
+
+FIG. 2: CAN-7USAT LOCATION ON LAUNCHER
+
+COMPREHENSIVE DESIGN REVIEW DOCUMENTATION GUIDELINES
+Comprehensive Design Review (CDR) - is a detailed design review of the system to ensure
+that the sub-systems can be analyzed in details and can meet the mass, dimension, budget,
+schedule and other specified constraints of the competition. It shall consist of:
+a) CAN-7USAT Mission Overview
+b) Team description
+c) List of acronyms
+d) System overview:
+i Brief summary of the mission
+ii Any changes made from the PDR stage
+iii Overview of system level requirement
+iv Entire CAN-7USAT activities from design stage to the CAN-7USAT launch,
+recovery and data retrieval
+v Deviations, if any
+vi CAN-7USAT physical layout
+vii Material procurement details
+viii System and sub-system level analysis and test results
+ix Flight readiness Parameters
+28
+
+x Pre-flight Analysis
+e) Sensor systems summary, characterization and test results
+f) Actuator summary shall include:
+i the control mechanisms of the actuator, if any
+ii the system level gyroscopic attitude control
+iii descent control mechanisms incorporated in the CAN-7USAT
+iv Simulation analysis, characterization and test results summary
+g) Block diagram of Attitude control loop and Actuator control loop should be brought
+out clearly
+h) Detailed description of realized Subsystems:
+i Payload Subsystem
+ii Housekeeping Subsystem:
+ Mechanical Subsystem
+ Actuators
+ Communication and Data Handling Subsystem
+ Electrical Power Subsystem
+ Sensor Systems
+ Parachute deployment and recovery
+iii Detailed description of changes made from the PDR stage and, reason thereof
+iv Subsystem level testing and results
+v CAN-7USAT integrated module simulated test results (Stress-Strain,
+Vibration, TTLC fit check, RF jamming within the structure)
+vi Environmental test results
+i) Design details, including parameters considered for design and simulations wherever
+applicable and available.
+j) CAN-7USAT algorithm, final test results, along with any deviations, if observed
+k) TTLC link margin realized
+l) Ground station final test results, along with any deviations, if observed
+m) CAN-7USAT Integration and Testing
+n) Mission Operations & Analysis
+o) Pre-flight requirement-check analysis
+p) Logistics and Transportation
+i CAN-7USAT transportation and handling
+ii Any special permits requirements
+q) CAN-7USAT ready to launch and final comments
+r) Conclusion
+
+CAN-7USAT LAUNCHER INTERFACES
+The CAN-7USAT shall be placed inside a cylindrical box, pressed on both sides. The CAN7USAT shall not be attached to the rocket by any mechanism, to avoid any complication during
+separation from the rocket. The payload area is covered by two aluminum panels. These panels
+are ejected at the specified altitude (i.e., ~ 1000 meters) and the CAN-7USAT is released by the
+29
+
+compressed spring push mechanism. The release mechanism is designed to hold a compressed
+spring adjacent to the payload with CAN-7USAT inside the payload bay. The spring is fixed to
+holding bracket affixed to the spars-load bearing structure inside the payload bay. Compressed
+spring rests inside the bracket with a nylon polymer line. A resistor wire such as nichrome wire
+is then placed on the polymer and heated up by electricity. This melts it and the tension in the
+cable is released. After successful cut the spring extends to its natural length. Set of separation
+springs are then used to further separate the payload.
+A mechanical switch opens the payload-bay panels outside, opening up the CAN-7USATs
+which are then ejected with Spring Push mechanism. Inside structure consists of four Aluminum
+U-beams with the specified dimensions and they create the main bearing structure of the rocket.
+Students are expected to fold the parachute properly and place their CAN-7USAT into the
+payload bay and close with panel covers.
+In the launch sequence, rocket achieves the apogee of ~1000 m, onboard sensor avionics senses
+the desired altitude reached and then sends command to a mechanical switch that opens the
+payload bay panel. Immediately after ~1.0 sec the panel opens, Nichrome resistor wire of the
+push spring mechanism heats up, releases the tension in the spring. The later eventually ejects
+the CAN-7USAT out of the payload bay. The flight then further releases the parachute of the
+recovery system, safe landing the rocket motor assembly. The first parachute shall be deployed
+immediately after separation from the launcher through atmospheric drag.
+
+COMPREHENSIVE DESIGN REVIEW PRESENTATION GUIDELINES
+Subsequent to submission of the CDR document a presentation to made by the team to jury for
+evaluation. The other guidelines remain same as provided in the PDR document. The tentative
+dates of CDR review will be announced by the organizers. The teams are advised to prepare
+the CDR document using Microsoft word/LaTeX document and submit as pdf. The CDR
+presentation shall be in the format already communicated during PDR stage.
+
+13 REQUIREMENTS COMPLIANCE
+The requirements compliance details should be provided clearly as below. Any deviation should
+be clearly brought out, stating the reason thereof.
+S. No
+
+Requirement
+
+1.
+
+Total mass of the CAN-7USAT shall be under 1000gm (+/- 50 gm).
+
+2.
+
+CAN-7USAT shall fit in a cylindrical body of 0.15 m diameter x 0.40 m height.
+Tolerances are to be included to facilitate container deployment from the rocket fairing.
+
+3.
+
+Any sharp edges on the container body shall be avoided as it can cause interfere during
+the CAN-7USAT ejection from the rocket.
+30
+
+4.
+
+Color of the CAN-7USAT body shall be fluorescent i.e., pink, red or orange, and shall
+embody the Indian flag.
+
+5.
+
+Rocket Airframe will not be allowed to be used as a part of any CAN-7USAT operation.
+
+6.
+
+The CAN-7USAT shall consist of necessary sensors to provide the following mandatory
+Real-time datasets: Position data, altitude, pressure, temperature, orientation data, power
+data & system status.
+
+8.
+
+Each data field shall be displayed in real-time on the ground station user
+interface/software.
+CAN-7USAT shall also record the data and save it into an onboard SD card in case of
+telemetry connection loss
+
+9.
+
+All electronics shall be enclosed and shielded from the environment. No electronics can
+be exposed except for sensors. There must be a structural enclosure.
+
+7.
+
+CAN-7USAT structure shall be built to survive 15 Gs of launch acceleration & 30 Gs of
+10. shock.
+Electronic circuit boards must be hard mounted using proper mounts such as standoffs
+11. and screws. High-performance adhesives can also be used.
+Team number, email address and phone number must be placed on the structure in
+12. English, Hindi and the Regional language of the launch state to aid in recovery.
+An audio beacon shall be installed on CAN-7USAT as a recovery assist. It may be
+13. powered after landing or operate continuously. The audio beacon must have a minimum
+sound pressure level of 92 dB, unobstructed.
+The CAN-7USAT shall have an external power switch with an indicator light or sound
+14. for being
+turned on or off, in order to avoid the de-assembling of CAN-7USATs on the launch
+pad.
+The CAN-7USAT shall have a battery capacity to support up to 2 hours of wait in on the
+15. launch pad with additional time for flight operations.
+The battery source may be alkaline, Ni-Cad, Ni-MH or Lithium ion. Lithium polymer
+16. batteries are not allowed. Lithium cells must be manufactured with a metal package
+similar to 18650 cells.
+An easily accessible battery compartment must be included allowing batteries to be
+17. installed or removed in less than a minute and not require total disassembly of the CAN7USAT.
+Spring contacts shall not be used for making electrical connections to batteries. Shock
+18. forces can cause momentary disconnects.
+The CAN-7USAT shall contain a total of 2 descent control mechanisms, to be used at
+19. different stages while descent.
+20. CAN-7USAT shall immediately deploy the primary parachute after ejection from the
+rocket.
+The primary parachute shall be connected to the outer body of the CAN-7USAT and no
+21. ejection mechanism shall be attached to it.
+31
+
+22. The descent rate of the primary parachute shall be 20 m/s ± 5m/s
+The secondary descent control mechanism shall open at an altitude of 600m (± 10 m) to
+23. further decrease the descent rate of the CAN-7USAT to 1 to 3m/s
+The descent control system shall not use any hazardous chemical-based explosive or
+24. pyrotechnic devices. However, green propulsion is allowed if being used under the same
+weight constraint.
+25. CAN-7USAT shall stabilize itself during the descent using the mechanical gyro
+mechanism.
+The CAN-7USAT communications radio shall be the XBEE radio series 1/2/pro and
+26.
+LORA WAN.
+The LORA WAN shall have their NETID/PANID set to the team number and declared
+27. at CDR stage.
+28. The XBEE radio shall not use the broadcast mode.
+The XBEE radio can operate in any mode as long as it does not interfere with other
+29. XBEE radios.
+Each team shall develop and use their own ground station. All telemetry shall be
+displayed in real-time during launch and descent. All telemetry shall be displayed in
+30. engineering units (meters, meters per second, Celsius, etc.). Teams shall plot data in
+real-time during flight.
+The ground station shall command the CAN-7USAT to start transmitting telemetry prior
+31. to launch.
+The ground control station antenna shall be elevated from ground level to ensure
+32. adequate coverage and range.
+33. Stability of the ground station must be ensured.
+The CAN-7USAT shall not transmit telemetry until commanded by the team ground
+34. station. Command can be executed while the CAN-7USAT is in the rocket on the launch
+pad.
+The ground station shall be able to command the CAN-7USAT to calibrate gyros,
+35. barometric altitude, accelerometer to command the parameters to zero as the CAN7USAT sits on the launch pad.
+The ground station shall generate .csv files of all sensor data as specified in the Telemetry
+36. Requirements section.
+37. Telemetry shall include mission time with one second or better resolution.
+Mission time/timestamp and system status states shall not be affected in the event of a
+38. processor reset during the launch and mission.
+The ground station shall include one laptop computer with a minimum of two hours of
+39. battery operation, XBEE radio and a hand-held antenna.
+The ground station must be portable so the team can be positioned at the ground station
+40. operation site along the flight line and if required the team can also move to a different
+location in case of distant landing location in order to locate the CAN-7USAT.
+
+32
+
+The flight software shall maintain and telemeter an indicator of the CAN-7USAT flight
+software state. An example set of states is 0 (BOOT), 1 (TEST_MODE), 2
+41. (LAUNCH_PAD), 3 (ASCENT), 4 (ROCKET_DEPLOY), 5 (DESCENT), 6
+(AEROBREAK_RELEASE), and 7 (IMPACT).
+Upon powering up, the CAN-7USAT shall collect the required telemetry at a 1 Hz
+42. sample rate or more. The telemetry data shall be transmitted with ASCII commaseparated fields followed by a carriage return
+● State current design compliance to requirements
+● Any deviation from the set design parameters is to be mentioned with proper reasons
+
+14 CODE OF ETHICS AND STANDARDS
+The teams are advised to follow code of ethics and standard during all times of the competition.
+Additional, noncompliance’s are provided below, that can lead to disqualification of teams
+from the competition:
+ copying any designs from any other CAN-7USAT competition.
+ copying codes/ground station software.
+ Submission of incomplete PDR/CDR documents.
+ Any team not meeting the competition timelines.
+ Teams found outsourcing the CAN-7USAT development.
+ Usage of any restricted or hazardous chemicals etc.
+NB; The decision of organizers will be final and binding on all the teams
+
+15 ADDITIONAL INFORMATION
+
+
+
+
+
+
+The local arrangements at Kushinagar shall be facilitated by SSDF on direct payment
+basis. The details shall be shared during the course of competition.
+Teams will be notified regarding the launcher interface details as and when launcher is
+finalized.
+In case of CAN-7USAT ejection system failure from the rocket a second launch
+opportunity will be provided to the teams at free of cost by the launch agency.
+If the CAN-7USAT is destroyed due to the rocket launch failure, the team shall be given
+preference in the finals of the subsequent CAN-7USAT competition.
+In case of any clarifications/queries regarding the document the teams are advised to
+contact organizers through their faculty advisor via email and write to directorpd@inspace.gov.in, within 15 days of the release of this document.
+
+16 CONCLUSION
+The competition is envisaged to give a hands-on experience to the students and encourage them
+in system engineering of satellite building through team building and cooperation. The
+33
+
+objectives of the competition are clearly brought out to communicate to the student teams for
+building an innovative and mission specific CAN-7USAT. The final evaluation of the teams
+is strictly carried out through monitoring of various parameters of the flight and the overall
+coordination of the team.
+
+34
+
+APPENDIX-A
+Antenna Systems for CANSAT
+1.0 Introduction:
+The mission requirement for the IN-SPACe CANSAT India students’ competition includes
+Navigation and Communication systems as part of the CANSAT payload. The Navigation system
+comprising of a GNSS/NavIC receiver shall generate position velocity and time (PVT) information
+about the CANSAT and the Communication system shall support the telecommand and telemetry
+signals between the CANSAT & its Ground Station. Both the systems inevitably need antennas to
+establish the navigation and communication links as shown in the Fig. 3. Typical antenna
+placement in a CANSAT is shown in Fig. 4.
+
+Fig. 3: Typical Scenario of CANSAT Antenna Operations
+
+Fig. 4: Typical Antennas on CANSAT
+35
+
+2.0 CANSAT Antenna System
+2.1 GNSS/NavIC Antenna Systems:
+The GNSS/NavIC receiver’s antenna is right hand circularly polarized (RHCP) and
+operates in the L-band. It needs to have a wide beam radiation pattern with unobstructed field of
+view in order to capture signals from maximum no. of GNSS/NavIC satellites. Typical it is
+mounted on the top deck of the CANSAT pointing towards space. Various antennas for this
+purpose include patch, helix, choke horn and cross-dipole. The patch antenna is preferred due
+to low profile design, low cost and ease in integration with the receiver circuit. A typical patch
+antenna has 6-8dBi gain and its 3-D & 2-D radiation patterns are shown in Fig. 5.
+
+Fig. 5: Radiation Patterns of a Patch Antenna (2-D and 3-D)
+2.2 Communication Antenna Systems:
+The CANSAT communication system shall have two antennas viz. Onboard
+Communication antenna mounted on the CANSAT and Ground Station Communication antenna
+on the ground.
+The Onboard communication antenna operates in the allowed frequency band (IMS 2.4 GHz or
+sub-1GHz bands) and has to be compact in size to fit inside the CANSAT container. As the
+CANSAT’s orientation varies throughout its descent, the radiation pattern of the Onboard antenna
+inevitably needs to be Omnidirectional. Various antenna options for this purpose includes Whip
+antennas (/2 dipole or /4 monopole), rubber ducky & patch array. The whip antenna & rubber
+ducky antenna are preferred due to their simple structure and desirable radiation pattern as shown
+in Fig. 6. These antennas are linearly polarized and must be mounted such that the length of the
+antenna is along the axis of CANSAT cylinder. These antennas typically have a gain of 2.2-4.0dBi.
+36
+
+Whip
+
+Antenna
+
+Fig. 7: Radiation Pattern of a Dipole Antenna
+The Ground Station Communication antenna is either fixed on the ground or handheld by the
+user. G/S antenna polarization (to the extent possible) should be aligned with the Onboard antenna
+polarization. It should be possible to rotate the G/S antenna along its axis for this purpose, either
+mechanically or manually by rotating the wrist, in case of handheld. It operates at the same
+frequency as the Onboard communication antenna & has larger size and higher gain to have a
+stable communication link for sending & receiving Telecommand & Telemetry signals. Various
+antenna options for this purpose includes paraboloid reflector, Patch array, Yagi-Uda, Double
+Biquad antenna etc. However, the Yagi-Uda antenna is preferred due to simplicity, easy
+construction and low cost. Typical radiation pattern is shown in Fig. 8 and 10-14 dBi gain can be
+achieved by varying the no. of elements.
+
+Fig. 8: Radiation Pattern of a Yagi-Uda Antenna
+3.0 Material of CANSAT Container/Body:
+While the Ground Station antenna can be easily positioned to operate in open space, care
+must be taken in choosing the material of the CANSAT container/body and placement of the
+onboard GNSS/NavIC & communication antennas. As RF signals are reflected and blocked by
+electrically conducting material the onboard antennas should be either placed outside the enclosure
+37
+
+or suitable openings should be provided in the CANSAT container/body so that they can radiate
+properly.
+4.0 Basic Antenna terms [1, 2]:
+4.1 Radiation Pattern: An antenna radiation pattern or antenna pattern is defined as a graphical
+representation of the radiation properties of the antenna as a function of space coordinates. That
+is, the antenna’s pattern describes how the antenna radiates energy out into space (or how it
+receives energy). The antenna pattern is actually three-dimensional and is commonly described
+with two planar patterns, called the principal plane patterns. These principal plane patterns can be
+obtained by making two orthogonal slices through the 3D pattern through the maximum value of
+the pattern or by direct measurement. It is these principal plane patterns that are commonly referred
+to as the antenna patterns, as shown in Fig. 9.
+Yagi-Uda 3D Radiation pattern
+
+Fig. 9: Typical Radiation Pattern of a Directive Antenna
+4.2 Gain: Gain of an antenna (in a given direction) is defined as the ratio of the intensity, in a
+given direction, to the radiation intensity that would be obtained if the power accepted by the
+antenna were radiated isotopically. Note that an isotropic radiator would be lossless and that it
+would radiate its energy equally in all directions. That means that the gain of an isotropic radiator
+is G = 1 (or 0 dB). It is customary to use the unit dBi (decibels relative to an isotropic radiator) for
+gain with respect to an isotropic radiator. Hence, gain of an antenna is a measure of directional
+nature of its radiation pattern. Gain does not include losses arising from impedance mismatches
+(reflection losses) and polarization mismatches. Typical gain values of a dipole/monopole are
+2.2dB to 4.0dBi whereas that of a Yagi-uda antenna varies from 10-14dBi depending upon the no.
+of director elements & type of driven element (ref. Fig. 10).
+
+Fig. 10: Types of Antenna Radiation Patterns
+4.3 Polarization: Polarization specifies the orientation of the electric field during one RF cycle.
+Polarization may be classified as linear, circular, or elliptical. If the vector that describes the
+electric field at a point in space as a function of time is always directed along a line, the field is
+38
+
+said to be linearly polarized. In general, however, the figure that the electric field traces is an
+ellipse, and the field is said to be elliptically polarized. Linear and circular polarizations are special
+cases of elliptical, and they can be obtained when the ellipse becomes a straight line or a circle,
+respectively. Clockwise rotation of the electric-field vector is designated as right-hand polarization
+and counterclockwise as left-hand polarization (refer Fig. 11).
+
+Fig. 11: Linear & Circular Polarization
+Polarization alignment of transmit & receive antenna is of paramount important in establishing a
+stable communication link between the Onboard & Ground Systems as depicted in Fig. 12.
+
+Fig. 12: Importance of Polarization alignment between Tx & Rx Antennas
+References:
+1. Balanis, C., Antenna Theory- Analysis and Design, 3rd ed., New York: WileyInterscience, 2005.
+2. Kraus JD and Marhefka RJ., Antennas for All Applications, 3rd ed. New York: McGrawHill; 2002.
+
+39
+
+DOCUMENT CONTROL SHEET
+01. Security & Distribution Status
+
+U: Unrestricted
+R: Restricted
+S: Secret
+a) < 2 yrs. b) 2-5 yrs.
+
+R
+02. Projected utility life
+03. Report status (indicate replacement of old document,
+if any)
+
+c) > 5 yrs.
+
+New
+
+04. Report No.: IN-SPACe.CAN.MR.CG.01, Issue No.:01 05. Part No. or Vol. No.:1
+dated 24-03-2026
+06. Title & Subtitle: Registration, Mission Requirements and Competition Guidelines
+07. Contract no.08. Collation (No. of pages): 40
+09. Personal Author(s): Nil
+10. Affiliation of Author(s) other than ISAC: NA
+11. Corporate Author(s): IN-SPACe
+12. Originating Unit: Division/Group: Promotion Directorate
+13. Date of Submission: 09-08-2022
+14. No. of References: - 01
+15. Abstract: This Document Contains the CAN-7USAT India student competition Registration,
+Mission
+requirements and Preliminary Design review Document Guidelines
+16. Keywords/Descriptors:
+Standardized by Bibliographical
+CAN-7USAT, PDR, Algorithms, Ground Station etc.
+Control Agency: (To be given by
+Library)
+1. Mission Requirements
+2. Preliminary
+Design
+Review
+Document
+3. CAN-7USAT
+17. Supplementary Elements: NA
+
+Approval by Director, Promotions IN-SPACe:
+
+Signature:
+
+40
+
+

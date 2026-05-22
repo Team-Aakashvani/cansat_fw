@@ -781,7 +781,7 @@ extern "C" void main_fc() {
     ESP_ERROR_CHECK(i2c1.init(I2C_NUM_1, nav::PINS.i2c1_sda, nav::PINS.i2c1_scl, 400000));
     ESP_ERROR_CHECK(spi.init(nav::PINS.spi_mosi, nav::PINS.spi_miso, nav::PINS.spi_sck));
     
-    // Production UART Allocation:
+    // Hardware UART Allocation:
     // UART1: GNSS (NavIC)
     // UART2: XBee Radio (Primary TM/TC)
     // UART0: P4 Media Coprocessor (Console output disabled)

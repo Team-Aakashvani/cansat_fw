@@ -1,6 +1,6 @@
-# Detailed Wiring Mapping — CAN-7USAT 2026 Production
+# Detailed Wiring Map — CAN-7USAT 2026 Flight
 
-This document provides the definitive pin-to-pin wiring map for all modules in the CAN-7USAT 2026 production configuration. 
+This document provides the standard pin-to-pin wiring map for all modules in the CAN-7USAT 2026 flight configuration. 
 
 **IMPORTANT:** This configuration uses the native **USB-Serial/JTAG Controller** for console output to free up all hardware UARTs for mission peripherals.
 

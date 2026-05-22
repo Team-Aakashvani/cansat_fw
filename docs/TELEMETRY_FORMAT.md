@@ -2,7 +2,7 @@
 
 ## Downlink CSV Format (CAN-7USAT §5.3)
 
-One packet transmitted per second over LoRa at 433 MHz.
+One packet transmitted per second over XBee Pro.
 
 ### Format
 
@@ -80,29 +80,15 @@ Breaking down:
 
 ---
 
-## LoRa Link Parameters (CAN-7USAT §6.2)
+## XBee Pro Link Parameters (CAN-7USAT §6.2)
 
 | Parameter | Value |
 |-----------|-------|
-| Frequency | 433 MHz |
-| Spreading Factor | SF10 |
-| Bandwidth | 125 kHz |
-| Coding Rate | CR 4/5 |
-| TX Power | 17 dBm (50 mW) |
-| Preamble | 8 symbols |
-| Sync Word | `0x12` (or lower byte of team ID) |
-| Modulation | LoRa (CSS) |
-| CRC | Enabled |
-
-### Approximate Range & Data Rate
-
-| SF | Symbol Rate | Packet Time (90 bytes) | Range (LoS) |
-|----|-------------|----------------------|-------------|
-| SF7 | fast | ~56 ms | ~2 km |
-| SF10 | medium | ~330 ms | ~8 km |
-| SF12 | slow | ~1300 ms | ~15 km |
-
-SF10 leaves 670 ms of receive window per second — sufficient for uplink command reception.
+| Mode | Transparent (AT) |
+| Baud Rate | 115200 |
+| PAN ID | Set to Team ID |
+| Protocol | 802.15.4 |
+| Approx. Range | ~1-5 km line-of-sight |
 
 ---
 
@@ -162,20 +148,16 @@ File flush occurs every **5 seconds**. Last 5 s of data may be lost if power is 
 ### Minimum GCS Hardware
 
 Any of the following:
-- Second ESP32-S3 with SX1278 running a simple receive-print sketch
-- TTGO LoRa32 (ESP32 + SX1278 integrated)
-- Raspberry Pi + Ra-02 SX1278 module via SPI
+- Second ESP32-S3 with XBee Pro
+- Laptop with USB-XBee adapter (Explorer)
 
 ### GCS Receive Parameters
 
 Configure your GCS radio to:
 ```
-Frequency:   433.0 MHz
-SF:          10
-BW:          125 kHz
-CR:          4/5
-Sync Word:   0x12  (or your team ID lower byte)
-CRC:         enabled
+Baud Rate:   115200
+PAN ID:      Your Team ID
+Mode:        Transparent
 ```
 
 ### Parsing the CSV
@@ -192,7 +174,7 @@ FIELDS = [
     "tilt_x", "tilt_y", "rot_z", "software_state"
 ]
 
-port = serial.Serial("COM5", 115200)  # Your GCS LoRa serial port
+port = serial.Serial("COM5", 115200)  # Your GCS XBee serial port
 
 while True:
     line = port.readline().decode().strip()
