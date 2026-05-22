@@ -758,8 +758,6 @@ static void setup_command_handlers() {
 
 #include "system_init.hpp"
 
-// ... (other includes unchanged)
-
 extern "C" void main_fc() {
     ESP_LOGI(TAG, "================================================");
     ESP_LOGI(TAG, "   AAKASHVANI — CAN-7USAT india 2026            ");

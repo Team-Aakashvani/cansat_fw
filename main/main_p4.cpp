@@ -42,8 +42,10 @@
 #include "nvs_flash.h"
 #include "driver/uart.h"
 
-// NOTE: On a real P4 build, you'd include camera/camera.hpp and reference
-// ESP-IDF v5.3 P4 BSP camera examples (esp_video + esp_h264 components).
+// ESP32-P4 Video / H.264 Headers (IDF v5.3+)
+#include "esp_video.h"
+#include "esp_h264_enc.h"
+#include "esp_video_init.h"
 
 static const char* TAG = "P4";
 
@@ -124,6 +126,10 @@ static void cam_task(void* /*arg*/)
     uint32_t frames_since_last = 0;
     FILE* video_file = nullptr;
 
+    // --- Video / Encoder Handles ---
+    esp_video_t* video = nullptr;
+    esp_h264_enc_t* encoder = nullptr;
+
     while (true)
     {
         P4State current = g_state.load();
@@ -136,6 +142,11 @@ static void cam_task(void* /*arg*/)
                 g_recording.store(0);
                 g_fps.store(0);
                 g_frame_count.store(0);
+                
+                // Cleanup handles
+                if (encoder) { esp_h264_enc_delete(encoder); encoder = nullptr; }
+                if (video)   { esp_video_close(video); video = nullptr; }
+                
                 if (video_file) {
                     fclose(video_file);
                     video_file = nullptr;
@@ -151,51 +162,77 @@ static void cam_task(void* /*arg*/)
                 last_fps_tick = xTaskGetTickCount();
                 frames_since_last = 0;
 
-                // Open output file on SD card
+                // 1. Open output file
                 char filename[32];
                 static int file_idx = 0;
                 snprintf(filename, sizeof(filename), "/sdcard/vid_%03d.h264", file_idx++);
                 video_file = fopen(filename, "wb");
                 if (!video_file) {
-                    ESP_LOGE(TAG, "Failed to open %s for writing", filename);
+                    ESP_LOGE(TAG, "Failed to open %s", filename);
                     g_state.store(P4State::STANDBY);
                     continue;
                 }
+
+                // 2. Initialise Video (MIPI-CSI 1080p @ 25fps)
+                esp_video_config_t v_cfg = {};
+                v_cfg.device = ESP_VIDEO_DEVICE_CSI0;
+                v_cfg.width = 1920;
+                v_cfg.height = 1080;
+                v_cfg.pixel_format = ESP_VIDEO_PIX_FMT_YUV420P;
+                v_cfg.fps = 25;
                 
-                // Camera/Encoder initialization would go here in v5.3
-                // esp_video_init(...);
-                // esp_h264_enc_init(...);
+                if (esp_video_open(&v_cfg, &video) != ESP_OK) {
+                    ESP_LOGE(TAG, "Video open failed");
+                    g_state.store(P4State::STANDBY);
+                    continue;
+                }
+
+                // 3. Initialise H.264 Encoder
+                esp_h264_enc_config_t e_cfg = {};
+                e_cfg.width = 1920;
+                e_cfg.height = 1080;
+                e_cfg.fps = 25;
+                e_cfg.bitrate = 4000000; // 4 Mbps
+                e_cfg.gop = 25;
+                e_cfg.profile = ESP_H264_ENC_PROFILE_MAIN;
+                
+                if (esp_h264_enc_create(&e_cfg, &encoder) != ESP_OK) {
+                    ESP_LOGE(TAG, "Encoder create failed");
+                    g_state.store(P4State::STANDBY);
+                    continue;
+                }
+
+                esp_video_start(video);
             }
 
-            // Simulate frame capture and H.264 stream writing
-            if (video_file) {
-                // In reality: esp_video_read() -> esp_h264_enc_process() -> fwrite()
-                uint8_t dummy_frame[1024]; // Simulate H.264 NAL unit
-                memset(dummy_frame, 0xAA, sizeof(dummy_frame));
-                fwrite(dummy_frame, 1, sizeof(dummy_frame), video_file);
-                
-                frames_since_last++;
-                g_frame_count.fetch_add(1);
+            // --- Capture Loop ---
+            esp_video_buffer_t* v_buf = nullptr;
+            if (esp_video_read(video, &v_buf, pdMS_TO_TICKS(100)) == ESP_OK) {
+                esp_h264_enc_frame_t e_frame = {};
+                if (esp_h264_enc_process(encoder, v_buf->data, v_buf->size, &e_frame) == ESP_OK) {
+                    fwrite(e_frame.data, 1, e_frame.size, video_file);
+                    frames_since_last++;
+                    g_frame_count.fetch_add(1);
+                }
+                esp_video_return_buffer(video, v_buf);
             }
 
-            // Calculate FPS every second
+            // Calculate FPS
             {
                 uint32_t now_tick = xTaskGetTickCount();
                 uint32_t elapsed_ms = (now_tick - last_fps_tick) * portTICK_PERIOD_MS;
                 if (elapsed_ms >= 1000) {
-                    uint8_t fps = (uint8_t)(frames_since_last * 1000 / elapsed_ms);
-                    g_fps.store(fps);
+                    g_fps.store((uint8_t)(frames_since_last * 1000 / elapsed_ms));
                     frames_since_last = 0;
                     last_fps_tick = now_tick;
                     g_sd_free_gb.store(get_sd_free_gb());
                 }
             }
-
-            vTaskDelay(pdMS_TO_TICKS(40)); // ~25 FPS
             break;
 
         case P4State::HALT_FLUSH:
-            ESP_LOGI(TAG, "HALT_FLUSH — flushing and closing file");
+            ESP_LOGI(TAG, "HALT_FLUSH — stopping capture");
+            if (video) esp_video_stop(video);
             if (video_file) {
                 fflush(video_file);
                 fsync(fileno(video_file));
@@ -314,6 +351,9 @@ void main_p4()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // 1.5 Video Subsystem Init
+    ESP_ERROR_CHECK(esp_video_init());
 
     // 2. SDMMC mount (using standard P4 Slot 0 pins)
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {

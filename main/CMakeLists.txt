@@ -20,6 +20,8 @@ idf_component_register(
         rf_mapping
         p4_link
         cli
+        esp_video
+        esp_h264
         freertos
         esp_common
         esp_hw_support
