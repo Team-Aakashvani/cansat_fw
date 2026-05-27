@@ -1,310 +1,86 @@
-# Testing Guide — CAN-7USAT 2026 Flight Software
-
-## Overview
-
-Testing is split into four stages:
-1. **BIT (Built-In Test)** — automatic power-on self-test
-2. **Bench Test** — sensor and telemetry verification on the desk
-3. **Integration Test** — full system with flight battery and GCS
-4. **Pre-Flight Checklist** — final go/no-go before launch
+# AAKASHVANI — Exhaustive Testing & Validation Protocol
+### Professional Certification for Flight Readiness
+> **From Bench to Launch Pad: A 25-Point Verification Guide.**
 
 ---
 
-## Stage 1 — BIT (Built-In Test)
-
-BIT runs automatically at every boot. Check the serial monitor output.
-
-### Pass criteria
-
-```
-I (xxx) BIT: === BIT PASS (flags=0x00000000) ===
-```
-
-### Interpreting BIT flags
-
-| Bit | Flag | Meaning | Critical? |
-|-----|------|---------|-----------|
-| 0 | `BIT_IMU_ABSENT` | BNO085 not responding | YES — halts |
-| 1 | `BIT_BARO_ABSENT` | BMP585 not responding | YES — halts |
-| 2 | `BIT_POWER_ABSENT` | INA260 not responding | YES — halts |
-| 3 | `BIT_GNSS_NO_NMEA` | No NMEA from N-GS-01 in 2 s | No — logs warning |
-| 4 | `BIT_RADIO_ABSENT` | XBee not responding | YES — halts |
-| 5 | `BIT_SD_FAIL` | SD card not mounted | No — logs warning |
-| 6 | `BIT_NVS_FAIL` | NVS namespace error | No — uses defaults |
-| 7 | `BIT_IMU_SANITY` | \|accel\| outside 7.8–11.8 m/s² | No — warns |
-| 8 | `BIT_BARO_SANITY` | Pressure outside 70–110 kPa | No — warns |
-| 9 | `BIT_VOLTAGE_LOW` | Voltage < 3.0 V | No — warns |
-
-### If BIT halts (critical failure)
-
-The status LED blinks rapidly (100 ms on/off) and the system stops. Check:
-- I2C wiring continuity (SDA/SCL correct, 4.7 kΩ pull-ups present)
-- SPI CS/MOSI/MISO/CLK wiring
-- Sensor power supply (3.3 V rail must be stable)
-
-To identify which sensor failed, read the serial output lines before the halt.
+## 1. Testing Philosophy
+Flight software validation at SVNIT follows a three-tier hierarchy:
+1.  **Deterministic Testing:** Built-In Test (BIT) ensures hardware-level integrity at every power-on.
+2.  **Dynamic Simulation:** Command-line injection of synthetic data to verify EKF convergence and state machine transitions.
+3.  **Environmental Soak:** Long-duration stress tests to detect memory leaks and thermal drift.
 
 ---
 
-## Stage 1.5 — Development Testing (Bypassing BIT)
+## 2. Stage 1: Built-In Test (BIT) Reference
 
-If you are testing software on a bare ESP32 without the CanSat PCB or sensors, the system will normally halt. You can bypass this in two ways:
+### 2.1 Failure Code Interpretation
+If the onboard RGB LED blinks **RED (Rapid)**, a critical BIT failure has occurred. Connect the USB console and check the flags.
 
-### A. Persistent Bypass (CLI)
-1. Boot the ESP32 and wait for the BIT failure.
-2. The CLI remains active. Type: `set bit_override 1` followed by `reboot`.
-3. The system will now log failures but proceed to spawn all flight tasks.
+| Bit | Flag | Test Procedure | Critical? |
+|-----|------|----------------|-----------|
+| **0** | `IMU_ABSENT` | BNO085 I2C probe failed. Check Address 0x4A. | **YES** |
+| **1** | `BARO_ABSENT`| BMP585 I2C probe failed. Check Address 0x46. | **YES** |
+| **2** | `POWER_ABSENT`| INA260 I2C probe failed. Check Address 0x40. | **YES** |
+| **4** | `RADIO_ABSENT`| XBee UART response timeout. Check CTS/RTS. | **YES** |
+| **7** | `IMU_SANITY` | Accel magnitude check: $|a| \in [7.8, 11.8]$ m/s². | NO |
+| **8** | `BARO_SANITY`| Pressure range check: $P \in [70, 110]$ kPa. | NO |
 
-### B. Compile-Time Bypass (Kconfig)
-1. Run `idf.py menuconfig`.
-2. Navigate to `CAN-7USAT Build Target`.
-3. Enable `Bypass BIT Critical Failure Halt`.
-4. Rebuild and flash.
-
-**Warning:** Never fly with an active BIT override. This is for software development ONLY.
-
----
-
-## Stage 2 — Bench Test
-
-### 2.0 USB CLI & Maintenance Mode
-
-The CanSat provides a direct configuration interface over the USB-C port.
-
-**Test Procedure:**
-1. Connect CanSat to PC.
-2. Open a serial terminal (e.g., PuTTY, Minicom, or `idf.py monitor`) at **115200 baud**.
-3. Press `Enter` to see the `> ` prompt.
-4. Type `help` to list commands.
-
-**Checks:**
-- [ ] `status` command returns current Team ID and Ground Altitude.
-- [ ] `get team_id` returns the value set in `config.hpp`.
-- [ ] `set team_id <new_id>` persists the value (verify with `get` after `reboot`).
-- [ ] `dispatch CAL` triggers a calibration event (check serial log).
+### 2.2 The BIT Override (Dev Mode Only)
+To test software logic without a connected CanSat PCB:
+1.  Connect via USB CLI (115200 baud).
+2.  Enter: `set bit_override 1`.
+3.  Enter: `reboot`.
+*Warning: This flag is cleared on every NVS-erase. Never fly with bit_override = 1.*
 
 ---
 
-### 2.1 IMU Test
+## 3. Stage 2: Hardware-In-The-Loop (HIL) Simulation
 
-**Expected output (100 Hz log rate — use DEBUG level):**
-```
-D (xxx) nav_task: IMU acc=[0.12, 0.04, 9.81] m/s² gyr=[0.00, 0.00, 0.00] rad/s
-```
+AAKASHVANI allows the Ground Station to "take over" the sensors via the simulation protocol. This is the only way to verify the transition to the **PARACHUTE** and **DRONE_HOVER** states on the bench.
 
-**Checks:**
-- [ ] `acc_z ≈ +9.81 m/s²` when board is flat and face-up
-- [ ] No `IMU: read failed` messages
-- [ ] Rotate board — accel components shift correctly between axes
-- [ ] Gyro reads ~0 when stationary (bias < 0.05 rad/s)
+### 3.1 Verification of 600m Deployment
+1.  Enter Simulation Mode: `1234,SIM,ENABLE`
+2.  Set Initial Pad Pressure: `1234,SIMP,101325` (Wait for CAL to finish).
+3.  Simulate Ascent: Inject decreasing pressure (e.g., `90000` Pa).
+4.  Simulate Descent: Inject increasing pressure.
+5.  **PASS CRITERIA:** When pressure reaches the equivalent of 600m (approx. 94300 Pa), verify:
+    *   `SOFTWARE_STATE` changes from 2 to 3.
+    *   Servo (GPIO38) moves to the **RELEASED** (2000µs) position.
 
-### 2.2 Barometer Test
-
-**Expected output:**
-```
-I (xxx) BMP585: ready, CHIP_ID=0x51
-D (xxx) sensor_task: BARO P=101234.5Pa T=28.3°C alt=-1.2m
-```
-
-**Checks:**
-- [ ] Pressure within ±5 kPa of your local sea-level pressure
-- [ ] Temperature within ±5 °C of ambient
-- [ ] Altitude changes when you carry the board upstairs (+1 m per floor ~= −12 Pa)
-
-### 2.3 GNSS Test
-
-GNSS requires a clear sky view. Test outdoors or near a window.
-
-**Expected output after fix (up to 60 s first cold start):**
-```
-I (xxx) NGPS01: GGA: lat=12.971600 lon=77.594600 alt=912.3m sats=7 fix=1
-```
-
-**Checks:**
-- [ ] `fix_quality >= 1` (1=GPS, 4=NavIC)
-- [ ] `satellites >= 4`
-- [ ] Coordinates match your actual location (±5 m)
-- [ ] `time_str` matches UTC time
-
-### 2.4 XBee Self-Test
-
-**Using two boards (loopback):**
-
-On the transmitting board, send a CX command from the GCS:
-```
-1234,CX,ON
-```
-Expected:
-```
-I (xxx) XBeeLink: RX cmd type=1 arg='ON' RSSI=-50
-I (xxx) CmdParser: CX → telemetry ON
-```
-
-**Checks:**
-- [ ] `XBee link ready` message in boot log
-- [ ] Telemetry packets transmitted every 1 s (`TX[1] 89 bytes`)
-
-### 2.5 Telemetry Format Verification
-
-Enable telemetry with a CX ON command or verify it is enabled by default.
-Watch for 1 Hz output on the serial monitor (copy from DEBUG log or SD card):
-
-```
-1234,00:00:05,5,23.4,101234.5,28.3,7.41,12:30:00,12.971600,77.594600,912.30,7,0.12,0.04,0.02,0
-```
-
-Verify against [TELEMETRY_FORMAT.md](TELEMETRY_FORMAT.md):
-- [ ] 16 comma-separated fields
-- [ ] Team ID matches config
-- [ ] Packet count increments each second
-- [ ] All floating-point fields have correct decimal places
-- [ ] `SOFTWARE_STATE` = 0 (PRE_FLIGHT) before launch
-
-### 2.6 SD Card Test
-
-Insert a formatted (FAT32) micro-SD card.
-```
-I (xxx) SDLogger: Logging to /sdcard/CANSAT_0001.csv
-```
-
-After 10 seconds, remove the SD card and read it on a PC:
-- [ ] `CANSAT_0001.csv` exists
-- [ ] First line is the CSV header
-- [ ] Subsequent lines are valid telemetry rows
-
-### 2.7 Power Monitor Test
-
-```
-I (xxx) PowerMgr: Power status: 0 → 0 (V=7.42V SoC=87.5%)
-```
-
-**Checks:**
-- [ ] Voltage matches multimeter reading ±0.1 V
-- [ ] SoC% is plausible for your battery charge state
-- [ ] No `LOW_VOLTAGE` warning at full charge
+### 3.2 Verification of Drone Stabilization
+1.  Simulate Altitude < 30m: `1234,SIMP,101000`.
+2.  **PASS CRITERIA:**
+    *   `SOFTWARE_STATE` changes to 4.
+    *   Motor PWM signals transition from 1000µs to active PID values (~1400µs).
+    *   Tilt the CanSat: Observe motor PWMs compensating to maintain level (Roll/Pitch).
 
 ---
 
-## Stage 3 — Integration Test
+## 4. Stage 3: Professional Pre-Flight Checklist
 
-Assemble the full CanSat (sensors, battery, XBee antenna, SD card). Run the ground station.
+### 4.1 Physical Integration (The "Shake" Test)
+- [ ] All I2C connectors secured with Kapton tape or hot glue.
+- [ ] XBee antenna orientation: Vertical, clear of all carbon-fiber or metal struts.
+- [ ] Battery voltage check: 7.2V - 8.4V.
+- [ ] SD Card: Sandisk Industrial Class 10 (High write endurance).
 
-### 3.1 Ground Station Setup
-
-Minimum GCS setup: a second ESP32 with XBee or an XBee module connected to a PC via USB.
-
-**Recommended:** Use the [CAN-7USAT GCS software](https://cansat.in) or any serial terminal at 115200 baud.
-
-### 3.2 Range Test
-
-- [ ] XBee packets received at 50 m range (RSSI > −100 dBm)
-- [ ] Packet loss rate < 5% over 60 s at 50 m (= < 3 missed packets in 60)
-- [ ] GCS software plots telemetry in real time
-
-### 3.3 Command Uplink Test
-
-From the GCS, send each command and verify response:
-
-| Command | Expected Behaviour |
-|---------|-------------------|
-| `1234,CX,ON` | Telemetry starts (if previously off) |
-| `1234,CX,OFF` | Telemetry pauses |
-| `1234,ST,00:00:00` | Mission time reset to 0 |
-| `1234,CAL` | Ground altitude set to current baro reading |
-| `1234,SIM,ENABLE` | Simulation mode activated |
-| `1234,SIMP,101325` | Pressure set to 101325 Pa in sim mode |
-| `1234,SIM,DISABLE` | Simulation mode off |
-
-### 3.4 Vibration Test (drop test)
-
-With the CanSat fully assembled:
-1. Place on a vibrating surface (or tap firmly with finger)
-2. Verify IMU does not freeze or report all-zero accel
-3. Verify SD file is not corrupted after vibration
-4. Verify LoRa TX continues without gaps
-
-### 3.5 Thermal Test (optional)
-
-- [ ] Operates at ambient -10 °C to +60 °C (typical competition range)
-- [ ] BMP585 temperature reading tracks a reference thermometer
-- [ ] No reset or watchdog trigger during 30-minute soak
+### 4.2 On-Pad Finalization
+- [ ] **BIT PASS:** GCS receives packet with `BIT_FLAGS = 0x00`.
+- [ ] **GNSS LOCK:** `SATS >= 7` and `HDOP < 1.5`.
+- [ ] **CALIBRATE:** Send `1234,CAL` command. Verify `ALTITUDE` resets to $0.0 \pm 0.5$ m.
+- [ ] **TIME SYNC:** Send `1234,ST,00:00:00` to synchronize mission clock.
+- [ ] **TELEMETRY:** Confirm RSSI > -90dBm at a distance of 100m.
 
 ---
 
-## Stage 4 — Pre-Flight Checklist
+## 5. Post-Flight Crash Forensics
 
-Complete immediately before launch. Print this checklist.
-
-### Hardware
-- [ ] Flight battery fully charged (measured voltage ≥ 7.2 V for 2S LiPo)
-- [ ] SD card formatted FAT32 and inserted
-- [ ] XBee antenna connected (TX into open air without antenna MAY damage radio)
-- [ ] Parachute packed and tether attached
-- [ ] Servo mechanism moves freely (servo_release → servo_home)
-- [ ] All I2C/SPI/UART wiring secured and strain-relieved
-- [ ] Buzzer/beacon connected to GPIO39
-
-### Software State
-- [ ] Power the CanSat; wait for BIT PASS in GCS telemetry
-- [ ] Team ID in `SOFTWARE_STATE = 0` (PRE_FLIGHT)
-- [ ] `PACKET_COUNT` incrementing at 1 Hz
-- [ ] `ALTITUDE` within ±20 m of launch site known elevation
-- [ ] `PRESSURE` within ±500 Pa of local met station
-- [ ] `GNSS_TIME` shows correct UTC ±5 min
-- [ ] `SATS ≥ 4` (wait for fix if needed)
-- [ ] `VOLTAGE` ≥ 7.1 V
-- [ ] Mission time = `00:00:00` (or set via ST command)
-
-### Ground Station
-- [ ] GCS receiving packets at 1 Hz with RSSI > −100 dBm
-- [ ] `CX,ON` command acknowledged
-- [ ] `CAL` command sent to calibrate ground altitude (send once on-pad)
-- [ ] Packet log file started on GCS PC
-
-### Final
-- [ ] Remove USB cable (board runs from battery)
-- [ ] Confirm LED status light behaviour (green = nominal in PRE_FLIGHT)
-- [ ] Hand CanSat to launch team. Do NOT send `ST` after this point.
+If the flight results in a non-nominal landing or reboot:
+1.  **Coredump Retrieval:** Boot the unit with the SD card inserted. Wait for `CoredumpExporter` to finish (LED will blink Blue).
+2.  **Event Log Analysis:** Connect via CLI and run `log_dump`. Check for `ERROR_FDIR` or `POWER_LOW` events immediately preceding the crash.
+3.  **Trace Analysis:** Use the ESP-IDF GDB tool to map the binary coredump back to the source code line.
 
 ---
 
-## Software State Reference
-
-| `SOFTWARE_STATE` | Phase | Description |
-|-----------------|-------|-------------|
-| 0 | PRE_FLIGHT | Sitting on pad, waiting for launch |
-| 1 | BOOST | Rocket motor burning |
-| 2 | BALLISTIC | Coasting upward after burnout |
-| 3 | PARACHUTE | Parachute deployed, descending |
-| 4 | DRONE_HOVER | Active stabilised descent |
-| 5 | LANDED | On the ground, beacon active |
-
----
-
-## Post-Flight Analysis
-
-### 5.1 Event Log Reading
-The event log survives software resets and can be read via the USB CLI after recovery:
-1. Connect via USB.
-2. Run `status` to see general flight stats (boot count, final ground alt).
-3. (Future) Use `log_dump` to print the NVS event ring buffer.
-
-### 5.2 Crash Analysis (Coredump)
-If the CanSat crashed or reset during flight due to a software panic:
-1. Insert the SD card and boot the CanSat.
-2. The firmware automatically detects the crash dump in flash.
-3. Look for the message: `I (xxx) CoredumpExporter: SUCCESS: Coredump saved to /sdcard/CRASH_XXXX.bin`.
-4. Copy the `.bin` file to your PC and use `espcoredump.py` to analyze:
-   ```bash
-   python -m esp_coredump info_corefile -t b -c CRASH_XXXX.bin build/factory.elf
-   ```
-
----
-
-## Known Test Limitations
-
-| Limitation | Notes |
-|------------|-------|
-| GNSS cold start 30–90 s | Power on 5 min before launch for warm start |
-| SD write lag | Flush every 5 s; last 5 s may be lost on hard impact landing |
-| XBee range ≈ 1–5 km LOS | Sufficient for 1 km apogee |
+*This guide is mandatory for all SVNIT Flight Ops personnel.*

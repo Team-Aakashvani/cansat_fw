@@ -1,5 +1,22 @@
 # Changelog — CAN-7USAT 2026 Flight Software
 
+## v1.1.0 (2026-05-27) — Major Refactor & P4 Deprecation
+
+### Added
+- **Cascaded PID Controller**: Dual-loop architecture (angle outer, rate inner) for superior attitude stability.
+- **MotorMixerX**: Standalone quadcopter 'X' mixer logic.
+- **Altitude-Based Mission Logic**: Automated arming and arm-latching (servo) at 600m ±10m.
+- **Descent-Rate Control**: Maintains vertical velocity between 1.0 and 3.0 m/s during drone phase.
+
+### Removed
+- **ESP32-P4 Support**: Deprecated and removed all digital video coprocessor components and `p4_link`.
+- **Digital Video Tasks**: Removed heartbeat monitoring and recording triggers in favor of standalone analog FPV.
+- **Telemetry Fields**: Excised `P4_REC`, `P4_SD`, and `P4_FPS` from downlink format.
+
+### Changed
+- **Pin Reclamation**: GPIO 26 and 27 are now unassigned and available for future use.
+- **Build System**: Cleaned up dependencies, removing `esp_video` and `esp_h264`.
+
 ## v1.0.0 (2026-05-19) — Flight Release
 
 ### Added

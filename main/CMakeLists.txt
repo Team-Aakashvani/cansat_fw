@@ -2,7 +2,6 @@ idf_component_register(
     SRCS 
         "main.cpp" 
         "main_gcs.cpp" 
-        "main_p4.cpp"
         "system_init.cpp"
     INCLUDE_DIRS "."
     REQUIRES
@@ -12,16 +11,12 @@ idf_component_register(
         control
         telemetry
         logging
-        comms
         power
         config_mgr
         watchdog
         bit
         rf_mapping
-        p4_link
         cli
-        esp_video
-        esp_h264
         freertos
         esp_common
         esp_hw_support

@@ -1,192 +1,76 @@
-# Flash Guide — CAN-7USAT 2026 Flight Software
-
-## Step 1 — Connect the ESP32-S3
-
-Connect the ESP32-S3 WROOM-1 to your PC via USB. The board uses either:
-- **USB-UART bridge** (CP2102 / CH340 chip) → appears as COM port
-- **Native USB** (ESP32-S3 USB OTG) → appears as COM port with JTAG
-
-### Find your COM port (Windows)
-
-Open **Device Manager** (`Win + X` → Device Manager) → **Ports (COM & LPT)**.
-Look for:
-- `Silicon Labs CP210x USB to UART Bridge (COM3)` — if using CP2102 bridge
-- `USB Serial Device (COM4)` — if using native USB
-
-If no port appears:
-- Install CP210x driver: https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
-- Install CH340 driver: https://www.wch.cn/downloads/CH341SER_ZIP.html
+# AAKASHVANI — Advanced Flashing & Deployment Manual
+### Production Procedures for SVNIT Flight Avionics
+> **The official guide for firmware deployment and partition management.**
 
 ---
 
-## Step 2 — Enter Download Mode (if needed)
+## 1. Hardware Interface Identification
 
-Most ESP32-S3 development boards auto-reset into download mode during flash. If not:
+The ESP32-S3 WROOM-1 supports two methods of flashing. SVNIT standards prioritize the **Native USB** interface for its built-in JTAG debugging capabilities.
 
-1. Hold the **BOOT** button (GPIO0)
-2. Press and release the **RESET** (EN) button
-3. Release **BOOT**
+### 1.1 Native USB (Recommended)
+*   **Port:** Connected directly to GPIO 19 (D-) and 20 (D+).
+*   **Device Name:** `ESP32-S3 USB Serial/JTAG Controller`.
+*   **Advantages:** Faster flashing (up to 2 Mbps), zero-config debugging.
 
-The board is now in download mode (no LED activity).
+### 1.2 UART Bridge
+*   **Port:** Connected to GPIO 43 (TX) and 44 (RX).
+*   **Device Name:** `Silicon Labs CP210x` or `CH340`.
+*   **Note:** Use this only if the native USB port is physically damaged.
 
 ---
 
-## Step 3 — First-Time Full Flash
+## 2. Deployment Workflow
 
-Open **ESP-IDF Command Prompt** and navigate to the project:
-
+### 2.1 The "Golden" Flash Command
+To deploy a flight-ready image, use the high-speed baud rate:
 ```bash
-cd "C:\Users\Lenovo\Desktop\Dev_Coding\Environments\Arduino_Projects\CANSAT\cansat_fw"
+idf.py -p COMx -b 921600 flash monitor
 ```
 
-### Flash everything (bootloader + partition table + firmware)
-
+### 2.2 First-Time Board Preparation
+When deploying to a brand-new ESP32-S3, you must wipe the NVS partition to clear factory-default junk data.
 ```bash
-idf.py -p COM3 flash
-```
-Replace `COM3` with your actual port.
+# Full Flash Erase (Destructive)
+idf.py -p COMx erase-flash
 
-This flashes:
-- Bootloader (`build/bootloader/bootloader.bin` at 0x0000)
-- Partition table (`build/partition_table/partition-table.bin` at 0x8000)
-- Factory application (`build/cansat_fw.bin` at 0x10000)
-
-### Flash + open monitor (recommended)
-
-```bash
-idf.py -p COM3 flash monitor
-```
-
-Press `Ctrl + ]` to exit the monitor.
-
----
-
-## Step 4 — Erase NVS Before First Flight
-
-The NVS partition stores team ID, ground altitude, and calibration. Erase it once on a fresh board:
-
-```bash
-idf.py -p COM3 erase-flash
-idf.py -p COM3 flash
-```
-
-Or erase only the NVS partition (preserves firmware):
-
-```bash
-# Erase NVS partition (offset 0x9000, size 0x6000 = 24 KB from partitions.csv)
-python -m esptool --chip esp32s3 -p COM3 erase_region 0x9000 0x6000
+# Re-flash everything
+idf.py -p COMx flash
 ```
 
 ---
 
-## Step 5 — Monitor Serial Output
+## 3. Partition Table Management
 
-```bash
-idf.py -p COM3 monitor
-```
+The flight computer uses a custom 8MB partition map (`partitions.csv`). Understanding this is critical for post-flight analysis.
 
-Expected boot sequence output:
-```
-I (xxx) main: === CAN-7USAT 2026 Flight Software v1.0 ===
-I (xxx) main: ESP-IDF v5.3 | CPU @ 240MHz
-I (xxx) NVSConfig: NVS ready (team_id=1234 ground_alt=0.0m boot=1)
-I (xxx) main: Initialising HAL...
-I (xxx) I2CBus: I2C-0 ready (SDA=8 SCL=9 400kHz)
-I (xxx) I2CBus: I2C-1 ready (SDA=10 SCL=11 400kHz)
-I (xxx) main: Initialising sensors...
-I (xxx) BNO085: SHTP ready, version 4.x.x
-I (xxx) BMP585: ready, CHIP_ID=0x51
-I (xxx) main: Initialising XBee link...
-I (xxx) XBeeLink: XBee link ready (UART 115200 baud)
-I (xxx) main: Running BIT...
-I (xxx) BIT: [BIT] IMU: PASS (|a|=9.82 m/s²)
-I (xxx) BIT: [BIT] BARO: PASS (P=101234.5 Pa T=28.3°C alt=-2.1m)
-I (xxx) BIT: [BIT] Power: PASS (V=7.41V I=0.120A P=0.89W)
-I (xxx) BIT: [BIT] XBee: PASS
-I (xxx) BIT: === BIT PASS (flags=0x00000000) ===
-I (xxx) main: All tasks spawned. Flight software running.
-```
+| Name | Offset | Size | Criticality |
+|------|--------|------|-------------|
+| **nvs** | 0x9000 | 24KB | **HIGH** (Contains Team ID & Calib) |
+| **factory** | 0x20000 | 3MB | **HIGH** (The Flight Firmware) |
+| **ota_0** | 0x320000 | 3MB | LOW (Used for Field Updates) |
+| **event_log**| 0x630000 | 1MB | **MED** (Your flight history) |
+| **coredump** | 0x730000 | 320KB| **MED** (Crash diagnostics) |
 
 ---
 
-## Flashing Without idf.py (esptool directly)
+## 4. Field Updates (OTA)
 
-If you only have pre-built binaries:
+AAKASHVANI supports wireless firmware updates via the XBee link. This is used when the CanSat is already inside the rocket fairing.
 
-```bash
-python -m esptool --chip esp32s3 -p COM3 -b 460800 \
-  --before default_reset --after hard_reset write_flash \
-  0x0     build/bootloader/bootloader.bin \
-  0x8000  build/partition_table/partition-table.bin \
-  0x10000 build/cansat_fw.bin
-```
+1.  **Trigger:** Send `1234,OTA,START` via the GCS.
+2.  **Transfer:** The GCS sends 32-byte hex chunks using `1234,OTA,CHUNK,<HEX>`.
+3.  **Finalize:** Send `1234,OTA,FINISH`. The CanSat will swap partitions and reboot.
 
 ---
 
-## Flash Speed
+## 5. Post-Flash Verification
 
-| Baud Rate | Flash Time (1.5 MB binary) |
-|-----------|---------------------------|
-| 115200 | ~2 min |
-| 460800 | ~30 s |
-| 921600 | ~15 s |
-
-Set baud rate:
-```bash
-idf.py -p COM3 -b 921600 flash
-```
+After flashing, the unit MUST be verified against these criteria:
+1.  **Boot Count:** Verify the console logs `Boot #X`. If this does not increment, the NVS is read-only or corrupted.
+2.  **Team ID:** Run `status` in the CLI. Ensure it matches your assigned ID.
+3.  **Task Soak:** Leave the unit powered for 5 minutes. Verify no watchdog resets (`TWDT`) occur.
 
 ---
 
-## OTA Update (Over-The-Air)
-
-The partition table includes `ota_0` (3 MB). Use the `OTA` command via the XBee link to perform firmware updates in the field.
-
----
-
-## Troubleshooting
-...
-- [ ] Voltage reads > 3.0 V (USB) or > 6.4 V (flight battery)
-- [ ] XBee: `XBee link ready` message appears
-- [ ] SD card: `Logging to /sdcard/CANSAT_0001.csv` (if SD inserted)
-**Fix:**
-1. Hold BOOT, tap RESET, release BOOT
-2. Try `idf.py -p COM3 --before no_reset flash`
-3. Try lower baud: `idf.py -p COM3 -b 115200 flash`
-
----
-
-### `esptool.py: error: Failed to write ... target flash`
-
-**Cause:** Flash write error, possibly due to flash chip mismatch.
-**Fix:** Erase flash completely first:
-```bash
-idf.py -p COM3 erase-flash
-idf.py -p COM3 flash
-```
-
----
-
-### Monitor garbled / no output
-
-**Cause:** Wrong baud rate selected in terminal, or UART pins misconfigured.
-**Fix:** `idf.py monitor` auto-detects. If using a manual terminal, set 115200 8N1.
-
----
-
-### Board resets immediately after flashing (brownout)
-
-**Cause:** USB power insufficient (voltage < 2.76 V threshold set in sdkconfig).
-**Fix:** Use a powered USB hub, or power the ESP32-S3 from the flight battery via the 3.3V regulator.
-
----
-
-## Post-Flash Verification Checklist
-
-- [ ] BIT PASS logged in serial monitor
-- [ ] Team ID shown correctly: `team_id=XXXX`
-- [ ] Barometric pressure reads ~101325 Pa (sea level) ±5000 Pa
-- [ ] IMU specific-force ~9.81 m/s² ±2
-- [ ] Voltage reads > 3.0 V (USB) or > 6.4 V (flight battery)
-- [ ] LoRa: `LoRa link ready` message appears
-- [ ] SD card: `Logging to /sdcard/CANSAT_0001.csv` (if SD inserted)
+*Firmware deployment is a safety-critical operation. Follow this manual strictly.*

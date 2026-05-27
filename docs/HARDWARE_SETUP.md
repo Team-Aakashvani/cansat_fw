@@ -1,206 +1,109 @@
-# Hardware Setup Guide — CAN-7USAT 2026
-
-## CanSat Physical Specification
-
-| Parameter | Value |
-|-----------|-------|
-| Form factor | Cylindrical, 150 mm diameter × 400 mm height |
-| Max mass | < 1 kg (target ~0.5 kg) |
-| Apogee | ~1000 m AGL |
-| Deployment altitude | 600 m ±10 m AGL |
-| Target descent rate | 1–3 m/s (drone-stabilised) |
+# AAKASHVANI — Exhaustive Hardware Specification
+### Complete Wiring, Pinout, and Electrical Guide
+> **The Blueprint for the CAN-7USAT 2026 Flight Hardware.**
 
 ---
 
-## Power System
+## 1. Power Distribution Network (PDN)
 
-### Flight Battery
-- **Type:** 2S LiPo (7.4 V nominal, 8.4 V fully charged, 6.4 V cutoff)
-- **Capacity:** ≥ 1000 mAh recommended (flight is ~5 min)
-- **Connector:** XT30 or JST-PH2.0 as per your PCB footprint
+The CanSat uses a split-rail architecture to isolate sensitive sensor logic from high-current motor transients.
 
-### Power Distribution
+### 1.1 High-Current Rail (7.4V)
+*   **Source:** 2S LiPo Battery.
+*   **Path:** Battery → XT30 Connector → INA260 (In-Series) → ESC Power Bus.
+*   **Load:** 4x BLDC Motors.
 
-```
-LiPo 2S (7.4V)
-    │
-    ├── INA260 (current/voltage monitor, I2C)
-    │       │
-    │       └── 5V BEC ──► ESP32-S3 VIN (3.3V LDO on-board)
-    │                  └── Logic sensors (3.3V)
-    │
-    ├── MAX17048 (fuel gauge, I2C, monitors raw LiPo voltage)
-    │
-    └── ESC ×4 (7.4V direct)  ──► BLDC motors ×4
-```
+### 1.2 Logic Rail (5.0V / 3.3V)
+*   **Source:** 5V/3A BEC (Battery Elimination Circuit).
+*   **Path:** Battery → BEC → ESP32-S3 VIN → Onboard 3.3V LDO.
+*   **Load:** ESP32-S3, BNO085, BMP585, GNSS, XBee, Parachute Servo.
 
-**IMPORTANT:** Never power ESP32-S3 directly from 7.4 V. Use a 5 V BEC → ESP32-S3 5V pin.
-
-### Power Consumption (typical)
-
-| State | Current (7.4 V) | Power |
-|-------|-----------------|-------|
-| Idle (PRE_FLIGHT) | ~200 mA | 1.5 W |
-| Active (BALLISTIC + comms) | ~350 mA | 2.6 W |
-| Drone hover (motors @ 30%) | ~2.0 A | 14.8 W |
-| Peak (motors @ 80%) | ~6.0 A | 44.4 W |
+**CRITICAL SAFETY:** The INA260 must be placed **before** the BEC and ESC split point to monitor the total system current.
 
 ---
 
-## GPIO Pin Assignment
+## 2. Complete GPIO Map (ESP32-S3 WROOM-1)
 
-### ESP32-S3 WROOM-1 Pinout (as configured in `config.hpp`)
-
-```
-                    ESP32-S3 WROOM-1
-                 ┌──────────────────────┐
-            3V3 ─┤ 3V3          GPIO1   ├─ (not used)
-             GND─┤ GND          GPIO2   ├─ SD_D0
-           GPIO3─┤ (not used)   GPIO3   ├─ (not used)
-           GPIO4─┤ SD_D1        GPIO5   ├─ MOTOR_0
-           GPIO6─┤ MOTOR_1      GPIO7   ├─ MOTOR_2
-           GPIO8─┤ I2C0_SDA     GPIO9   ├─ I2C0_SCL
-          GPIO10─┤ I2C1_SDA     GPIO11  ├─ I2C1_SCL
-          GPIO12─┤ SD_D2        GPIO13  ├─ SD_D3
-          GPIO14─┤ SD_CLK       GPIO15  ├─ SD_CMD
-          GPIO16─┤ MOTOR_3      GPIO17  ├─ GNSS_TX
-          GPIO18─┤ GNSS_RX      GPIO19  ├─ (USB-JTAG D-)
-          GPIO20─┤ (USB-JTAG D+)GPIO21  ├─ CC1101_CS
-          GPIO26─┤ P4_LINK_TX   GPIO27  ├─ P4_LINK_RX
-          GPIO32─┤ XBEE_RX      GPIO34  ├─ XBEE_TX
-          GPIO35─┤ SPI_MOSI     GPIO36  ├─ SPI_SCK
-          GPIO37─┤ SPI_MISO     GPIO38  ├─ SERVO
-          GPIO39─┤ BEACON       GPIO40  ├─ PWR_SWITCH
-          GPIO48─┤ LED_STATUS           │
-                 └──────────────────────┘
-```
-
-**NOTE:** For a detailed point-to-point mapping of all wires, see [WIRING_DIAGRAM.md](./WIRING_DIAGRAM.md).
-
----
-
-## High-Speed Serial Links
-
-### XBee Pro (Primary Telemetry)
-The XBee Pro operates in **Transparent Mode** on UART2. It carries the primary 1 Hz telemetry CSV and receives uplink commands.
-
-| XBee Pro Pin | ESP32-S3 Pin | Notes |
-|------------|-------------|-------|
-| DIN (Pin 3) | GPIO34 | TX from ESP |
-| DOUT (Pin 2)| GPIO32 | RX to ESP |
-| VCC | 3.3V | 215mA peak TX |
-| GND | GND | |
-
-### P4 Media Link (Video Control)
-Dedicated link to the ESP32-P4 coprocessor for video state management.
-
-| P4 Signal | ESP32-S3 Pin | Notes |
-|------------|-------------|-------|
-| P4_RX | GPIO27 | Commands to P4 |
-| P4_TX | GPIO26 | Heartbeat from P4 |
-
-### GNSS (NavIC)
-Standard UART1 connection to the N-GS-01 module.
-
-| N-GS-01 Pin | ESP32-S3 Pin | Notes |
-|-------------|-------------|-------|
-| TX | GPIO18 | NMEA Data |
-| RX | GPIO17 | Configuration |
+| Pin | Symbol | Type | Interface | Device | Logic / Unit |
+|-----|--------|------|-----------|--------|--------------|
+| **2** | `SD_D0` | I/O | SDMMC | SD Card | Data Line 0 |
+| **4** | `SD_D1` | I/O | SDMMC | SD Card | Data Line 1 |
+| **5** | `MOT_0` | OUT | PWM | ESC 1 | LEDC_CH0 (Front-Left) |
+| **6** | `MOT_1` | OUT | PWM | ESC 2 | LEDC_CH1 (Front-Right) |
+| **7** | `MOT_2` | OUT | PWM | ESC 3 | LEDC_CH2 (Rear-Right) |
+| **8** | `SDA_0` | I/O | I2C0 | BNO/BMP | Navigation Bus |
+| **9** | `SCL_0` | OUT | I2C0 | BNO/BMP | Navigation Bus |
+| **10**| `SDA_1` | I/O | I2C1 | INA/MAX/ENV| Power/Environment Bus |
+| **11**| `SCL_1` | OUT | I2C1 | INA/MAX/ENV| Power/Environment Bus |
+| **12**| `SD_D2` | I/O | SDMMC | SD Card | Data Line 2 |
+| **13**| `SD_D3` | I/O | SDMMC | SD Card | Data Line 3 |
+| **14**| `SD_CLK`| OUT | SDMMC | SD Card | Clock |
+| **15**| `SD_CMD`| OUT | SDMMC | SD Card | Command |
+| **16**| `MOT_3` | OUT | PWM | ESC 4 | LEDC_CH3 (Rear-Left) |
+| **17**| `GNSS_TX`| OUT | UART1 | N-GS-01 | Transmit to GNSS |
+| **18**| `GNSS_RX`| IN | UART1 | N-GS-01 | Receive from GNSS |
+| **21**| `CC_CS` | OUT | SPI | CC1101 | Chip Select |
+| **26**| `FREE_26`| — | — | — | **UNASSIGNED (Available)** |
+| **27**| `FREE_27`| — | — | — | **UNASSIGNED (Available)** |
+| **32**| `XBEE_RX`| IN | UART2 | XBee Pro | Telecommand In |
+| **34**| `XBEE_TX`| OUT | UART2 | XBee Pro | Telemetry Out |
+| **35**| `MOSI` | OUT | SPI | CC1101 | Master Out |
+| **36**| `SCK` | OUT | SPI | CC1101 | Serial Clock |
+| **37**| `MISO` | IN | SPI | CC1101 | Master In |
+| **38**| `SERVO` | OUT | PWM | Servo | LEDC_CH4 (Latching) |
+| **39**| `BEACON`| OUT | DIG | Buzzer | Active High |
+| **40**| `PWR_SW`| IN | DIG | Switch | Arming Interlock |
+| **48**| `LED` | OUT | RGB | WS2812 | Status Indicator |
 
 ---
 
-## SPI Bus — CC1101 RF Scanner (GPIO 35–37)
+## 3. Communication Protocol Standards
 
-The SPI bus is used exclusively by the **CC1101 RF scanner** for the secondary mission objective.
+### 3.1 I2C Navigation Bus (I2C0)
+*   **Clock Speed:** 400 kHz (Fast Mode).
+*   **Pull-ups:** 4.7 kΩ hardware resistors required on SDA/SCL.
+*   **Addresses:**
+    *   `BNO085:` 0x4A
+    *   `BMP585:` 0x46
 
-| CC1101 Pin | ESP32-S3 Pin |
-|------------|-------------|
-| MOSI | GPIO35 |
-| MISO | GPIO37 |
-| SCK | GPIO36 |
-| CS | GPIO21 |
-| VCC | 3.3V |
-| GND | GND |
+### 3.2 I2C Power/Env Bus (I2C1)
+*   **Clock Speed:** 100 kHz (Standard Mode) for maximum reliability with cable-tethered sensors.
+*   **Addresses:**
+    *   `INA260:` 0x40
+    *   `MAX17048:` 0x36
+    *   `SHT4x:` 0x44
+    *   `SGP41:` 0x59
 
----
-
-## Motor + Servo (LEDC PWM)
-
-### ESC Connections
-
-| Channel | GPIO | Motor Position | Rotation |
-|---------|------|---------------|----------|
-| LEDC_CH0 | GPIO5 | Front-Left | CW |
-| LEDC_CH1 | GPIO6 | Front-Right | CCW |
-| LEDC_CH2 | GPIO7 | Rear-Right | CW |
-| LEDC_CH3 | GPIO16 | Rear-Left | CCW |
-| LEDC_CH4 | GPIO38 | **Servo** | N/A |
-
-All ESCs use standard 50 Hz PWM: 1000 µs = disarmed, 1050 µs = idle, 2000 µs = full throttle.
-
-**ESC Calibration:** Before first flight, calibrate all four ESCs:
-1. Power on with throttle at 2000 µs (or use calibration procedure in ESC manual)
-2. Wait for beeps
-3. Move to 1000 µs
-4. Wait for confirming beeps
-
-### Servo (Parachute Release)
-
-- 1000 µs → Home (closed, tether retained)
-- 2000 µs → Released (tether deployed)
-
-Connect servo signal to GPIO38, servo power (5V) from BEC.
+### 3.3 High-Speed Serial (UART)
+*   **XBee Pro:** 115,200 baud, 8N1, No Flow Control.
+*   **GNSS:** 115,200 baud (Configured for NavIC + GPS @ 1Hz).
 
 ---
 
-## Recovery Beacon
+## 4. Actuator Specifications
 
-Connect a piezoelectric buzzer or transistor-driven siren to **GPIO39**.
+### 4.1 ESCs (Electronic Speed Controllers)
+*   **Type:** BLHeli_S or BLHeli_32 recommended.
+*   **Protocol:** Standard 50Hz PWM.
+*   **Timing:** 
+    *   `1000 µs:` Stopped / Disarmed.
+    *   `1100 µs:` Minimum Idle.
+    *   `2000 µs:` Full Throttle.
 
-| GPIO39 State | Beacon |
-|-------------|--------|
-| 0 | OFF |
-| 1 | ON (50% duty 1 Hz after LANDED) |
-
-Circuit: GPIO39 → 1 kΩ → NPN transistor (BC547) base. Collector to buzzer (5V). Emitter to GND.
-
----
-
-## SD Card
-
-| SDMMC Pin | ESP32-S3 Pin |
-|-----------|-------------|
-| CLK | GPIO14 |
-| CMD | GPIO15 |
-| D0 | GPIO2 |
-| D1 | GPIO4 |
-| D2 | GPIO12 |
-| D3 | GPIO13 |
-| VCC | 3.3V |
-| GND | GND |
-
-**Format:** FAT32. Cards up to 32 GB supported by ESP-IDF FATFS. Use **Class 10 / U1** minimum for reliable 1 Hz write performance.
+### 4.2 Latching Servo
+*   **Torque:** ≥ 1.5 kg-cm.
+*   **Operation:** 
+    *   `1000 µs:` Arms Released (Storage/Ascent).
+    *   `2000 µs:` Arms Latched (Drone Mode).
 
 ---
 
-## LED Status Indicator
+## 5. RF Layout & Interference Guidelines
 
-The ESP32-S3 WROOM-1 includes an onboard RGB LED on **GPIO48**.
-
-| Pattern | Meaning |
-|---------|---------|
-| Rapid blink (100 ms) | BIT FAILURE — halt |
-| Solid | Normal operation (future: add phase-colour mapping) |
+1.  **Antenna Spacing:** The XBee (2.4GHz) and CC1101 (Sub-GHz) antennas must be separated by at least 10cm.
+2.  **GNSS Clear Zone:** No copper pours or high-speed traces should be placed within 15mm of the GNSS patch antenna.
+3.  **Twisted Pairs:** I2C and UART cables longer than 5cm should be twisted with a Ground wire to minimize EMI from the ESCs.
 
 ---
 
-## PCB Design Recommendations
-
-1. **Ground plane:** Full ground pour on bottom layer. No gaps under RF section.
-2. **Decoupling caps:** 100 nF + 10 µF ceramic at each sensor VDD pin.
-3. **I2C pull-ups:** Single 4.7 kΩ per line. Do not add multiple sets.
-4. **GNSS keep-out:** 10 mm no-copper zone around GNSS patch antenna.
-5. **LoRa keep-out:** 15 mm no-copper around LoRa module RF section.
-6. **ESP32-S3 antenna:** Leave 10 mm clearance around the PCB trace antenna on the WROOM-1 module edge.
-7. **SDMMC:** Keep SD traces short (< 30 mm), matched length, away from RF.
-8. **Motor driver isolation:** ESC power ground and signal ground joined at single star point.
+*This specification is the master reference for PCB layout and wiring harness assembly.*

@@ -349,9 +349,9 @@ struct PinConfig {
     int gnss_tx  = 17;
     int gnss_rx  = 18;
 
-    // UART2 (ESP32-P4 Media Coprocessor)
-    int p4_tx    = 26;
-    int p4_rx    = 27;
+    // Unassigned (previously ESP32-P4 Media Coprocessor)
+    int unassigned_26 = 26;
+    int unassigned_27 = 27;
 
     // SDMMC (SD card logging)
     int sd_clk   = 14;
