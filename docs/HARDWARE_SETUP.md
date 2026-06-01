@@ -9,9 +9,9 @@
 The CanSat uses a split-rail architecture to isolate sensitive sensor logic from high-current motor transients.
 
 ### 1.1 High-Current Rail (7.4V)
-*   **Source:** 2S LiPo Battery.
+*   **Source:** 2S Li-ion Battery (2x 18650 Molicel 35A in Series).
 *   **Path:** Battery → XT30 Connector → INA260 (In-Series) → ESC Power Bus.
-*   **Load:** 4x BLDC Motors.
+*   **Load:** 4x BetaFPV 1103 8500KV Motors.
 
 ### 1.2 Logic Rail (5.0V / 3.3V)
 *   **Source:** 5V/3A BEC (Battery Elimination Circuit).
@@ -83,7 +83,7 @@ The CanSat uses a split-rail architecture to isolate sensitive sensor logic from
 ## 4. Actuator Specifications
 
 ### 4.1 ESCs (Electronic Speed Controllers)
-*   **Type:** BLHeli_S or BLHeli_32 recommended.
+*   **Model:** 4in1 Blheli_s-ESC 20amp HAKRC.
 *   **Protocol:** Standard 50Hz PWM.
 *   **Timing:** 
     *   `1000 µs:` Stopped / Disarmed.
@@ -91,6 +91,7 @@ The CanSat uses a split-rail architecture to isolate sensitive sensor logic from
     *   `2000 µs:` Full Throttle.
 
 ### 4.2 Latching Servo
+*   **Model:** 1.5G Linear Servo Motor Micro Size Right.
 *   **Torque:** ≥ 1.5 kg-cm.
 *   **Operation:** 
     *   `1000 µs:` Arms Released (Storage/Ascent).

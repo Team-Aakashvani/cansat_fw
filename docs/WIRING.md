@@ -51,11 +51,11 @@ The CanSat utilizes two independent I2C buses to maximize reliability and bandwi
 
 | Device | S3 Pin | Channel | Logic | Range |
 |:---|:---:|:---:|:---:|:---|
-| **Front-Left Motor**| 5 | LEDC_CH0 | PWM | 1000–2000µs |
-| **Front-Right Motor**| 6 | LEDC_CH1 | PWM | 1000–2000µs |
-| **Rear-Right Motor** | 7 | LEDC_CH2 | PWM | 1000–2000µs |
-| **Rear-Left Motor** | 16 | LEDC_CH3 | PWM | 1000–2000µs |
-| **Latching Servo** | 38 | LEDC_CH4 | PWM | 1000µs (Open) / 2000µs (Shut) |
+| **Motor 1 (FL)**| 5 | LEDC_CH0 | PWM | HAKRC ESC 1 |
+| **Motor 2 (FR)**| 6 | LEDC_CH1 | PWM | HAKRC ESC 2 |
+| **Motor 3 (RR)** | 7 | LEDC_CH2 | PWM | HAKRC ESC 3 |
+| **Motor 4 (RL)** | 16 | LEDC_CH3 | PWM | HAKRC ESC 4 |
+| **Linear Servo** | 38 | LEDC_CH4 | PWM | 1.5G Micro Servo |
 | **Recovery Buzzer** | 39 | — | DIG | Active High (92dB Siren) |
 | **Status RGB LED** | 48 | — | RMT | WS2812B Protocol |
 

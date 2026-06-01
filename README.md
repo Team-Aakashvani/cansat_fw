@@ -47,6 +47,8 @@ The flight follows a strictly defined six-phase lifecycle:
 
 ## 3. Hardware Requirements
 
+For a complete list of physical parts and recommended accessories, see the [Bill of Materials (BOM)](docs/COMPONENTS.md).
+
 ### 3.1 Primary Avionics (Flight Computer)
 | Component | Part Number | Purpose |
 |-----------|-------------|---------|
@@ -59,7 +61,7 @@ The flight follows a strictly defined six-phase lifecycle:
 | **Fuel Gauge**| MAX17048 | LiPo SoC% and cell voltage monitoring |
 
 ### 3.2 Power Specifications
-*   **Battery:** 2S LiPo (7.4V nominal, 8.4V peak).
+*   **Battery:** 2S Li-ion (18650 Molicel 35A).
 *   **Regulation:** 5V BEC for MCU/Servo, 7.4V direct rail for ESCs.
 *   **Typical Current:** 200mA (idle) up to 6.0A (peak hover).
 

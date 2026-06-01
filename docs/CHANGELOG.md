@@ -1,5 +1,15 @@
 # Changelog — CAN-7USAT 2026 Flight Software
 
+## v1.1.1 (2026-06-01) — Hardware Synchronization
+
+### Added
+- **Bill of Materials (BOM)**: Added `docs/COMPONENTS.md` with specific part numbers for motors, ESCs, servos, and sensors.
+- **Battery Specifications**: Standardized on 18650 Molicel 35A Li-ion cells for high-current discharge.
+
+### Changed
+- **Documentation Update**: Synchronized `HARDWARE_SETUP.md`, `WIRING.md`, and `README.md` with specific user-provided hardware (HAKRC ESC, BetaFPV motors, Linear Servo).
+- **Private Memory**: Established private component tracking in `.gemini/tmp` for internal audit.
+
 ## v1.1.0 (2026-05-27) — Major Refactor & P4 Deprecation
 
 ### Added
