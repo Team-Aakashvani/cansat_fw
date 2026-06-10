@@ -40,13 +40,13 @@ The CanSat uses a split-rail architecture to isolate sensitive sensor logic from
 | **14**| `SD_CLK`| OUT | SDMMC | SD Card | Clock |
 | **15**| `SD_CMD`| OUT | SDMMC | SD Card | Command |
 | **16**| `MOT_3` | OUT | PWM | ESC 4 | LEDC_CH3 (Rear-Left) |
-| **17**| `GNSS_TX`| OUT | UART1 | N-GS-01 | Transmit to GNSS |
-| **18**| `GNSS_RX`| IN | UART1 | N-GS-01 | Receive from GNSS |
+| **17**| `GNSS_TX`| OUT | UART1 | Edgehax NavIC | Transmit to GNSS |
+| **18**| `GNSS_RX`| IN | UART1 | Edgehax NavIC | Receive from GNSS |
 | **21**| `CC_CS` | OUT | SPI | CC1101 | Chip Select |
 | **26**| `FREE_26`| — | — | — | **UNASSIGNED (Available)** |
 | **27**| `FREE_27`| — | — | — | **UNASSIGNED (Available)** |
-| **32**| `XBEE_RX`| IN | UART2 | XBee Pro | Telecommand In |
-| **34**| `XBEE_TX`| OUT | UART2 | XBee Pro | Telemetry Out |
+| **32**| `XBEE_RX`| IN | UART2 | XBee 3 Pro TH | Telecommand In |
+| **34**| `XBEE_TX`| OUT | UART2 | XBee 3 Pro TH | Telemetry Out |
 | **35**| `MOSI` | OUT | SPI | CC1101 | Master Out |
 | **36**| `SCK` | OUT | SPI | CC1101 | Serial Clock |
 | **37**| `MISO` | IN | SPI | CC1101 | Master In |
@@ -75,7 +75,7 @@ The CanSat uses a split-rail architecture to isolate sensitive sensor logic from
     *   `SGP41:` 0x59
 
 ### 3.3 High-Speed Serial (UART)
-*   **XBee Pro:** 115,200 baud, 8N1, No Flow Control.
+*   **XBee 3 Pro TH:** 115,200 baud, 8N1, No Flow Control.
 *   **GNSS:** 115,200 baud (Configured for NavIC + GPS @ 1Hz).
 
 ---
@@ -104,6 +104,22 @@ The CanSat uses a split-rail architecture to isolate sensitive sensor logic from
 1.  **Antenna Spacing:** The XBee (2.4GHz) and CC1101 (Sub-GHz) antennas must be separated by at least 10cm.
 2.  **GNSS Clear Zone:** No copper pours or high-speed traces should be placed within 15mm of the GNSS patch antenna.
 3.  **Twisted Pairs:** I2C and UART cables longer than 5cm should be twisted with a Ground wire to minimize EMI from the ESCs.
+
+---
+
+## 6. Two-Track PCB Architecture
+
+The CanSat avionics are developed under a dual-track physical architecture to maximize both structural survivability and space-efficiency testing.
+
+### Track A: The Bridge Architecture (Flight Candidate)
+An "H-shaped" layout composed of three independent PCB sections (Left, Bridge, Right) to separate sensitive navigation from high-current ESCs.
+*   **Structural Joints:** The boards are physically mated using 10-pin and 4-pin castellated edge joints. These joints are soldered to provide both electrical continuity and a mechanical bond capable of withstanding 70G launch vibrations.
+*   **Net Isolation:** Signals crossing the bridge must utilize the `_BR` naming convention to force KiCad to route through the castellations.
+
+### Track B: The Single PCB Variant (Testing Candidate)
+A monolithic 100mm × 200mm layout.
+*   **Purpose:** To verify if all components and their custom 1:1 scale courtyards can fit onto a single un-panelized board without physical collisions. 
+*   **Custom Courtyards:** Both tracks rigorously utilize exact physical footprint boundaries (`CanSat_Library`) to guarantee zero-collision mating for all breakout boards.
 
 ---
 

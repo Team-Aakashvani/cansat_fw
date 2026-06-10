@@ -16,7 +16,7 @@ This document lists the specific hardware components required to build the CAN-7
 | **MCU** | ESP32-S3 WROOM-1 | 1 | Core Processor |
 | **IMU** | BNO085 (9-Axis) | 1 | Orientation & Stabilization |
 | **Barometer** | BMP585 (High Precision) | 1 | Altimetry |
-| **GNSS Module** | N-GS-01 (NavIC + GPS) | 1 | Global Positioning |
+| **GNSS Module** | Edgehax NavIC | 1 | Global Positioning |
 | **Linear Servo** | 1.5G Linear Servo Motor Micro Size Right | 1 | Latching Mechanism |
 | **Storage** | Micro SD Card (Class 10) | 1 | Flight Data Logging |
 
@@ -32,18 +32,17 @@ This document lists the specific hardware components required to build the CAN-7
 ## 4. Communication & RF
 | Component | Specification | Quantity | Purpose |
 | :--- | :--- | :---: | :--- |
-| **Primary Link** | XBee Pro (2.4GHz) | 1 | Ground Station Telemetry |
+| **Primary Link** | XBee 3 Pro TH (2.4GHz) | 1 | Ground Station Telemetry |
 | **Secondary Link** | CC1101 (Sub-GHz) | 1 | Inter-Satellite / Backup |
 | **Antennas** | 2.4GHz Dipole, 433MHz Whip, GNSS Patch | 3 | RF Transmission |
 
 ## 5. Mission Specific / FPV
 | Component | Specification | Quantity | Purpose |
 | :--- | :--- | :---: | :--- |
-| **Camera** | FPV Camera (Micro Size) | 1 | Visual Navigation |
-| **Video TX** | TBS Unify Pro Nano or Happymodel OVX300 | 1 | 5.8GHz Video Feed |
+| **Camera** | FPV Camera (Micro Size) | 1 | Visual Navigation (Off-board) |
+| **Video TX** | TBS Unify Pro Nano or Happymodel OVX300 | 1 | 5.8GHz Video Feed (Off-board) |
 | **VOC Sensor** | SGP41 | 1 | Air Quality Mission |
 | **Humid/Temp** | SHT4x | 1 | Environmental Data |
-| **Pitot Tube** | SDP31 (Differential Pressure) | 1 | Airspeed Measurement |
 
 ## 6. Recovery & Safety
 | Component | Specification | Quantity | Purpose |
@@ -51,3 +50,9 @@ This document lists the specific hardware components required to build the CAN-7
 | **Buzzer** | Active 5V Buzzer (92dB) | 1 | Post-Landing Recovery |
 | **Indicator** | WS2812B RGB LED | 1 | Visual Status Feedback |
 | **Parachute** | 30-45cm Diameter Nylon | 1 | Controlled Descent |
+
+## 7. PCB Architecture & Structural Connectors
+| Component | Specification | Quantity | Purpose |
+| :--- | :--- | :---: | :--- |
+| **Bridge Connectors** | 10-Pin & 4-Pin Castellated Edge Joints | 2 Sets | 70G-rated structural mating between Bridge and Main PCBs |
+| **Custom Courtyards** | 1:1 Scale Breakout Footprints | All | Embedded in `CanSat_Library` to guarantee physical zero-collision layout |

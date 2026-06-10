@@ -8,8 +8,8 @@
 
 | Peripheral | Bus | S3 TX | S3 RX | Baud Rate | Wire Color (Std) | Description |
 |:---|:---:|:---:|:---:|:---:|:---:|:---|
-| **XBee Pro** | UART2 | 34 | 32 | 115,200 | Yellow / Orange | Primary Telemetry Link |
-| **GNSS N-GS-01**| UART1 | 17 | 18 | 115,200 | White / Blue | NavIC Satellite Data |
+| **XBee 3 Pro TH** | UART2 | 42 | 41 | 115,200 | Yellow / Orange | Primary Telemetry Link |
+| **Edgehax NavIC** | UART1 | 17 | 18 | 115,200 | White / Blue | Edgehax NavIC Module |
 | **Native Console**| UART0 | 19 | 20 | 115,200 | USB Internal | System Logs / JTAG |
 
 ---
@@ -18,9 +18,12 @@
 
 The CanSat utilizes two independent I2C buses to maximize reliability and bandwidth.
 
+> [!WARNING]
+> **Bridge Architecture Net Naming Rule:** For the H-shaped Bridge PCB variant, any I2C or UART signal passing from the main ESP32 board to the Bridge board must be renamed with a `_BR` suffix on the Bridge side (e.g., `SDA_0` becomes `SDA_0_BR`). This severs the KiCad ratsnest line and forces the copper to route exclusively through the physical castellated edge connectors.
+
 ### 2.1 I2C Bus 0 (The Flight Bus)
-*   **SDA:** GPIO 8
-*   **SCL:** GPIO 9
+*   **SDA:** GPIO 8 (Bridge: `SDA_0_BR`)
+*   **SCL:** GPIO 9 (Bridge: `SCL_0_BR`)
 *   **Pull-up:** 4.7 kΩ to 3.3V
 *   **Device 1:** **BNO085 IMU** (Addr: 0x4A). Must be located at the CanSat Geometric Center.
 *   **Device 2:** **BMP585 Barometer** (Addr: 0x46). Must have a foam cover to prevent light-induced pressure drift.
