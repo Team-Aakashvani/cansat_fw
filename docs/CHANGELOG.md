@@ -8,7 +8,7 @@
 
 ### Changed
 - **Documentation Update**: Synchronized `HARDWARE_SETUP.md`, `WIRING.md`, and `README.md` with specific user-provided hardware (HAKRC ESC, BetaFPV motors, Linear Servo).
-- **Private Memory**: Established private component tracking in `.gemini/tmp` for internal audit.
+- **Private Memory**: Established private component tracking in `.cache/tmp` for internal audit.
 
 ## v1.1.0 (2026-05-27) — Major Refactor & P4 Deprecation
 
