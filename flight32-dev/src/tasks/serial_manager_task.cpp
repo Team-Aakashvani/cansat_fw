@@ -8,6 +8,8 @@
 #include "serial_manager_task.h"
 #include "../flight_controller.h" // Add this include
 #include "../protocols/serial_4way_protocol.h"
+#include "../network/wifi_ota_manager.h"
+#include "../gps/gps_manager.h"
 
 
 
@@ -47,6 +49,9 @@ void SerialManagerTask::setup()
 
 void SerialManagerTask::run()
 {
+    wifi_ota_handle();
+    gpsManager.update();
+
     if (_inPassthroughMode)
     {
         while (Serial.available() > 0)
@@ -57,9 +62,9 @@ void SerialManagerTask::run()
         return; // Exit early as we are in passthrough mode
     }
 
-    while (Serial.available() > 0)
+    while (Serial.available() > 0 || wifi_ota_available() > 0)
     {
-        uint8_t c = Serial.read();
+        uint8_t c = (Serial.available() > 0) ? Serial.read() : wifi_ota_read();
         // Always attempt to parse as MSP first
         bool consumed_by_msp = _parse_msp_char(c);
 

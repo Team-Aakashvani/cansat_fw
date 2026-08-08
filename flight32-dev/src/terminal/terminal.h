@@ -103,8 +103,11 @@ public:
     void _handle_mem(String &args);
     void _handle_reboot(String &args);
     void _handle_quit(String &args);
+    void _handle_wifi(String &args);
+    void _handle_gps(String &args);
     void _handle_imu_data(String &args);
     void _handle_imu_calibrate(String &args);
+    void _handle_i2c_scan(String &args);
     void _handle_imu_lpf_bandwidth(String &args);
     void _handle_rx_data(String &args);
     void _handle_rx_status(String &args);

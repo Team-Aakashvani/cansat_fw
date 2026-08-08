@@ -8,6 +8,9 @@
 #include "../config/motor_config.h"
 #include "terminal.h"
 #include "../flight_controller.h"
+#include <Wire.h>
+#include "../network/wifi_ota_manager.h"
+#include "../gps/gps_manager.h"
 
 #include "../config/terminal_config.h"
 #include "../config/settings_config.h"
@@ -88,9 +91,12 @@ const Command Terminal::_commands[] = {
     {"mem", &Terminal::_handle_mem, "Shows current memory usage.", CommandCategory::SYSTEM},
     {"reboot", &Terminal::_handle_reboot, "Reboots the ESP32.", CommandCategory::SYSTEM},
     {"quit", &Terminal::_handle_quit, "Exits the terminal session.", CommandCategory::SYSTEM},
+    {"wifi", &Terminal::_handle_wifi, "Manages Wi-Fi AP ('wifi on', 'wifi off', 'wifi status').", CommandCategory::SYSTEM},
+    {"gps", &Terminal::_handle_gps, "Displays live GPS status, coordinates, and Course Over Ground.", CommandCategory::SYSTEM},
 
     {"get imu.data", &Terminal::_handle_imu_data, "Displays the latest IMU readings.", CommandCategory::IMU},
     {"set imu.calibrate", &Terminal::_handle_imu_calibrate, "Calibrates the IMU.", CommandCategory::IMU},
+    {"i2c_scan", &Terminal::_handle_i2c_scan, "Scans the I2C bus for connected devices.", CommandCategory::IMU},
     {"get imu.lpf_bandwidth", &Terminal::_handle_imu_lpf_bandwidth, "Gets the current IMU LPF bandwidth.", CommandCategory::IMU},
     {"set imu.lpf_bandwidth", &Terminal::_handle_imu_lpf_bandwidth, "Sets the IMU LPF bandwidth (e.g., 'set imu.lpf_bw LPF_42HZ_N_5MS').", CommandCategory::IMU},
 
@@ -675,6 +681,61 @@ void Terminal::_handle_quit(String &args)
     _should_quit = true;
 }
 
+void Terminal::_handle_wifi(String &args)
+{
+    args.trim();
+    if (args.equalsIgnoreCase("on"))
+    {
+        if (wifi_ota_is_initialized())
+        {
+            com_send_log(ComMessageType::TERMINAL_OUTPUT, "Wi-Fi AP is already running (SSID: Flight32_AP, IP: 192.168.4.1).");
+        }
+        else
+        {
+            com_send_log(ComMessageType::TERMINAL_OUTPUT, "Starting Wi-Fi Access Point ('Flight32_AP')...");
+            wifi_ota_init();
+            com_send_log(ComMessageType::TERMINAL_OUTPUT, "Wi-Fi AP started successfully! IP: 192.168.4.1 (Port 2323)");
+        }
+    }
+    else if (args.equalsIgnoreCase("off"))
+    {
+        if (wifi_ota_is_initialized())
+        {
+            wifi_ota_stop();
+            com_send_log(ComMessageType::TERMINAL_OUTPUT, "Wi-Fi Access Point stopped.");
+        }
+        else
+        {
+            com_send_log(ComMessageType::TERMINAL_OUTPUT, "Wi-Fi is already OFF.");
+        }
+    }
+    else
+    {
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Wi-Fi AP Status: %s", wifi_ota_is_initialized() ? "ON (SSID: Flight32_AP, IP: 192.168.4.1)" : "OFF");
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Usage: wifi <on|off|status>");
+    }
+}
+
+void Terminal::_handle_gps(String &args)
+{
+    GpsData gps = gpsManager.getData();
+    com_send_log(ComMessageType::TERMINAL_OUTPUT, "--- GPS Status ---");
+    com_send_log(ComMessageType::TERMINAL_OUTPUT, "Fix Status      : %s", gps.has_fix ? "3D FIX OK" : "NO FIX (Searching Satellites...)");
+    com_send_log(ComMessageType::TERMINAL_OUTPUT, "Satellites      : %u", gps.satellites);
+    if (gps.has_fix || gps.satellites > 0)
+    {
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Latitude        : %.6f deg", gps.latitude);
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Longitude       : %.6f deg", gps.longitude);
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Altitude (ASL)  : %.2f m", gps.altitude_meters);
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Ground Speed    : %.2f m/s", gps.speed_mps);
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Course (COG)    : %.1f deg (True North Heading)", gps.course_deg);
+    }
+    else
+    {
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Note: Make sure GPS antenna has open sky view.");
+    }
+}
+
 void Terminal::_handle_imu_data(String &args)
 {
     if (!_imu_task)
@@ -684,10 +745,11 @@ void Terminal::_handle_imu_data(String &args)
     }
 
     const ImuData &data = _imu_task->getImuSensor().getData();
-    com_send_log(ComMessageType::TERMINAL_OUTPUT, "Acc: x=%.2f, y=%.2f, z=%.2f | Gyro: x=%.2f, y=%.2f, z=%.2f | Temp: %.2f C",
+    com_send_log(ComMessageType::TERMINAL_OUTPUT, "Acc: x=%.2f, y=%.2f, z=%.2f | Gyro: x=%.2f, y=%.2f, z=%.2f | Mag: x=%.2f, y=%.2f, z=%.2f | Temp: %.2f C | Baro: %.2f hPa | Alt: %.2f m",
                  data.accelX, data.accelY, data.accelZ,
                  data.gyroX, data.gyroY, data.gyroZ,
-                 data.temp);
+                 data.magX, data.magY, data.magZ,
+                 data.temp, data.pressure, data.altitude);
 }
 
 void Terminal::_handle_imu_calibrate(String &args)
@@ -701,6 +763,55 @@ void Terminal::_handle_imu_calibrate(String &args)
     com_send_log(ComMessageType::LOG_INFO, "Calibrating IMU sensor...");
     _imu_task->getImuSensor().calibrate();
     com_send_log(ComMessageType::LOG_INFO, "IMU sensor calibration complete.");
+}
+
+void Terminal::_handle_i2c_scan(String &args)
+{
+    com_send_log(ComMessageType::TERMINAL_OUTPUT, "Scanning I2C bus (SDA: 21, SCL: 22)...");
+    if (_imu_task)
+    {
+        _imu_task->suspend();
+        delay(15); // Wait for any in-flight I2C transaction on core 1 to settle
+    }
+
+    int count = 0;
+    Wire.setTimeOut(10); // Use 10ms timeout per address so full 127-address scan finishes in < 1.2 seconds!
+    for (uint8_t addr = 1; addr < 128; addr++)
+    {
+        Wire.beginTransmission(addr);
+        uint8_t error = Wire.endTransmission();
+        if (error == 0)
+        {
+            auto readReg = [addr](uint8_t reg) -> uint8_t {
+                Wire.beginTransmission(addr);
+                Wire.write(reg);
+                if (Wire.endTransmission(false) != 0) return 0xFF;
+                Wire.requestFrom((uint8_t)addr, (uint8_t)1);
+                return Wire.available() ? Wire.read() : 0xFF;
+            };
+
+            uint8_t r00 = readReg(0x00);
+            uint8_t r0f = readReg(0x0F);
+            uint8_t r75 = readReg(0x75);
+            uint8_t rd0 = readReg(0xD0);
+
+            com_send_log(ComMessageType::TERMINAL_OUTPUT, " -> Found I2C device at 0x%02X (%d) | reg[0x00]=0x%02X, reg[0x0F]=0x%02X, reg[0x75]=0x%02X, reg[0xD0]=0x%02X", addr, addr, r00, r0f, r75, rd0);
+            count++;
+        }
+    }
+    if (count == 0)
+    {
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "No I2C devices found.");
+    }
+    else
+    {
+        com_send_log(ComMessageType::TERMINAL_OUTPUT, "Scan complete. Found %d device(s).", count);
+    }
+
+    if (_imu_task)
+    {
+        _imu_task->resume();
+    }
 }
 
 void Terminal::_handle_imu_lpf_bandwidth(String &args)

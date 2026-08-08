@@ -9,7 +9,8 @@
 
 #include "../imu_sensor.h"
 #include "../../config/imu_config.h"
-#include <MPU6500_WE.h>
+#include <MPU9250_WE.h>
+#include <Adafruit_BMP280.h>
 #include "../../utils/MahonyAHRS.h"
 
 class ImuMpu6050 : public ImuSensor
@@ -30,12 +31,17 @@ public:
     // Removed static LpfBandwidth getLpfBandwidthFromIndex(uint8_t index);
     uint16_t getI2CErrorCount() const override { return _i2c_error_count; }
     bool isSensorHealthy() const override { return _is_healthy; }
+    bool isBaroHealthy() const override { return _baro_healthy; }
+    bool isMagHealthy() const override { return _mag_healthy; }
 
 private:
-    MPU6500_WE _sensor; // Changed type from ESP32_MPU6050 to MPU6050 (from I2Cdevlib)
+    MPU9250_WE _sensor; // Use MPU9250_WE for 9-DOF (MPU6500 + AK8963 Magnetometer)
+    Adafruit_BMP280 _baro; // BMP280 Barometer sensor
     ImuQuaternionData _quaternion;
     static uint16_t _i2c_error_count;
     bool _is_healthy = false;
+    bool _mag_healthy = false;
+    bool _baro_healthy = false;
 
     MahonyAHRS _mahony_filter; // Mahony filter instance
 };

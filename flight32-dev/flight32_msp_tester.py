@@ -613,15 +613,10 @@ def send_and_receive(
         f"\n{BLUE}{BOLD}{ICON_COMMAND} Testing {command_name} (Code: {command_code}, Protocol: V{protocol_version}){RESET}"
     )
 
-    # Serialize the MSP command into a byte packet, including header and checksum.
+    # Clear the input buffer before writing to ensure we only read the response to this command.
+    ser.reset_input_buffer()
     command_packet = serialize_msp_command(command_code, data, protocol_version)
     ser.write(command_packet)
-
-    # Clear the input buffer before reading to ensure we only get the current response.
-    # A small delay is added for MSP_RC as it might sometimes send unwanted bytes initially.
-    if command_code == MSP_COMMANDS["MSP_RC"]:
-        time.sleep(0.05)  # Give some time for unwanted bytes to arrive
-    ser.reset_input_buffer()
 
     response_buffer = b""
     start_time = time.time()

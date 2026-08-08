@@ -10,6 +10,7 @@
 #include "com_manager.h"
 #include "config/com_manager_config.h"
 #include "utils/system_constants.h"
+#include "network/wifi_ota_manager.h"
 
 
 // FreeRTOS queue for communication messages.
@@ -53,6 +54,10 @@ void com_task(void *pvParameters)
                 if (_line_needs_clearing && msg.type != ComMessageType::TERMINAL_PROMPT)
                 {
                     Serial.println();
+                    if (wifi_ota_is_client_connected())
+                    {
+                        wifi_ota_write((const uint8_t *)"\r\n", 2);
+                    }
                     _line_needs_clearing = false;
                 }
 
@@ -77,15 +82,30 @@ void com_task(void *pvParameters)
                     }
                     Serial.print(tag);
                     Serial.println(msg.content);
+                    if (wifi_ota_is_client_connected())
+                    {
+                        wifi_ota_write((const uint8_t *)tag, strlen(tag));
+                        wifi_ota_write((const uint8_t *)msg.content, strlen(msg.content));
+                        wifi_ota_write((const uint8_t *)"\r\n", 2);
+                    }
                     _line_needs_clearing = false;
                     break;
                 }
                 case ComMessageType::TERMINAL_OUTPUT:
                     Serial.println(msg.content);
+                    if (wifi_ota_is_client_connected())
+                    {
+                        wifi_ota_write((const uint8_t *)msg.content, strlen(msg.content));
+                        wifi_ota_write((const uint8_t *)"\r\n", 2);
+                    }
                     _line_needs_clearing = false;
                     break;
                 case ComMessageType::TERMINAL_PROMPT:
                     Serial.print(msg.content);
+                    if (wifi_ota_is_client_connected())
+                    {
+                        wifi_ota_write((const uint8_t *)msg.content, strlen(msg.content));
+                    }
                     _line_needs_clearing = true;
                     break;
                 case ComMessageType::TERMINAL_FLUSH:

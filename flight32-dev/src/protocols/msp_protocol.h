@@ -70,9 +70,13 @@ static constexpr uint8_t MSP_CAPABILITY_LED_STRIP_BIT = (1 << 7); // For Flight3
 static constexpr uint8_t MSP_FC_TYPE_FLIGHT32 = 2; // Mimicking a common Betaflight/Multiwii type
 static constexpr uint8_t MSP_BOARD_TYPE_FLIGHT32 = 7; // Using 7 as a generic board type (e.g., from older MultiWii/Cleanflight)
 
-// MSP Status Flags
-static constexpr uint8_t MSP_STATUS_ACCEL_SENSOR_FLAG = (1 << 0); // Bitmask for Accelerometer present
-static constexpr uint8_t MSP_STATUS_GYRO_SENSOR_FLAG = (1 << 1);  // Bitmask for Gyroscope present
+// MSP Status Sensor Bitmask Flags (MultiWii/Betaflight Standard)
+static constexpr uint8_t MSP_STATUS_ACCEL_SENSOR_FLAG = (1 << 0); // Bit 0: Accelerometer
+static constexpr uint8_t MSP_STATUS_BARO_SENSOR_FLAG  = (1 << 1); // Bit 1: Barometer
+static constexpr uint8_t MSP_STATUS_MAG_SENSOR_FLAG   = (1 << 2); // Bit 2: Magnetometer
+static constexpr uint8_t MSP_STATUS_GPS_SENSOR_FLAG   = (1 << 3); // Bit 3: GPS
+static constexpr uint8_t MSP_STATUS_SONAR_SENSOR_FLAG = (1 << 4); // Bit 4: Sonar / Rangefinder
+static constexpr uint8_t MSP_STATUS_GYRO_SENSOR_FLAG  = (1 << 5); // Bit 5: Gyroscope
 static constexpr uint8_t MSP_BRAKING_ACTION_NONE = 0; // Value for no braking action in MSP_STATUS payload
 
 
@@ -188,4 +192,5 @@ static constexpr uint8_t MSP_SET_FILTER_CONFIG = 204;
 static constexpr uint8_t MSP_SET_BOX = 205;
 static constexpr uint8_t MSP_MEM_STATS = 208;
 static constexpr uint8_t MSP_SENSOR_STATUS = 209;
+static constexpr uint8_t MSP_FLIGHT32_ENV = 240; // Custom command: 3 floats (temp_c, pressure_hpa, alt_m)
 

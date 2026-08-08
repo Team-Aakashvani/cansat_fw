@@ -19,6 +19,8 @@
 #include "../config/motor_config.h"
 #include "../config/filter_config.h"
 #include "../config/serial_config.h"
+#include "../network/wifi_ota_manager.h"
+#include "../gps/gps_manager.h"
 
 #include <cmath>
 #include <cstring>
@@ -59,6 +61,10 @@ static void quaternionToEuler(float w, float x, float y, float z, float *roll, f
     float siny_cosp = 2 * (w * z + x * y);
     float cosy_cosp = 1 - 2 * (y * y + z * z);
     *yaw = atan2(siny_cosp, cosy_cosp) * RADIANS_TO_DEGREES;
+    if (*yaw < 0.0f)
+    {
+        *yaw += 360.0f; // Wrap negative angles to circular 0..360 degrees
+    }
 }
 
 // CRC8 for MSP V2
@@ -81,31 +87,31 @@ static uint8_t _crc8_dvb_s2(uint8_t crc, uint8_t ch)
 
 void MspProcessor::send_msp_response(uint8_t command, const uint8_t *payload, uint8_t payload_size, uint8_t protocol_version)
 {
+    uint8_t pkt[256];
+    uint16_t idx = 0;
+
     if (protocol_version == 1)
     { // MSP V1 Response
-        Serial.write(MSP_SYNC_BYTE);
-        Serial.write(MSP_V1_IDENTIFIER);
-        Serial.write(MSP_DIRECTION_FC);
+        pkt[idx++] = MSP_SYNC_BYTE;
+        pkt[idx++] = MSP_V1_IDENTIFIER;
+        pkt[idx++] = MSP_DIRECTION_FC;
 
         uint8_t crc = 0;
-        Serial.write((uint8_t)payload_size); // V1 size is 1 byte
+        pkt[idx++] = (uint8_t)payload_size;
         crc ^= (uint8_t)payload_size;
-        Serial.write((uint8_t)command); // V1 command is 1 byte
+        pkt[idx++] = (uint8_t)command;
         crc ^= (uint8_t)command;
 
         for (uint16_t i = 0; i < payload_size; i++)
         {
-            Serial.write(payload[i]);
+            pkt[idx++] = payload[i];
             crc ^= payload[i];
         }
-        Serial.write(crc);
+        pkt[idx++] = crc;
     }
     else
     { // MSP V2 Response
-        // Flag byte (currently always 0, for future use)
         uint8_t flag = 0;
-
-        // CRC calculation for MSP v2
         uint8_t crc = 0;
         crc = _crc8_dvb_s2(crc, flag);
         crc = _crc8_dvb_s2(crc, (uint8_t)(command & 0xFF));
@@ -113,21 +119,27 @@ void MspProcessor::send_msp_response(uint8_t command, const uint8_t *payload, ui
         crc = _crc8_dvb_s2(crc, (uint8_t)(payload_size & 0xFF));
         crc = _crc8_dvb_s2(crc, (uint8_t)((payload_size >> 8) & 0xFF));
 
-        Serial.write(MSP_SYNC_BYTE);
-        Serial.write(MSP_V2_IDENTIFIER); // MSP V2 Protocol identifier
-        Serial.write(MSP_DIRECTION_FC);   // Direction byte for response (from FC to GUI)
-        Serial.write(flag);
-        Serial.write((uint8_t)(command & 0xFF));             // Command ID Low Byte
-        Serial.write((uint8_t)((command >> 8) & 0xFF));      // Command ID High Byte
-        Serial.write((uint8_t)(payload_size & 0xFF));        // Payload Size Low Byte
-        Serial.write((uint8_t)((payload_size >> 8) & 0xFF)); // Payload Size High Byte
+        pkt[idx++] = MSP_SYNC_BYTE;
+        pkt[idx++] = MSP_V2_IDENTIFIER;
+        pkt[idx++] = MSP_DIRECTION_FC;
+        pkt[idx++] = flag;
+        pkt[idx++] = (uint8_t)(command & 0xFF);
+        pkt[idx++] = (uint8_t)((command >> 8) & 0xFF);
+        pkt[idx++] = (uint8_t)(payload_size & 0xFF);
+        pkt[idx++] = (uint8_t)((payload_size >> 8) & 0xFF);
 
         for (uint16_t i = 0; i < payload_size; i++)
         {
-            Serial.write(payload[i]);
-            crc = _crc8_dvb_s2(crc, payload[i]); // Add payload byte to CRC
+            pkt[idx++] = payload[i];
+            crc = _crc8_dvb_s2(crc, payload[i]);
         }
-        Serial.write(crc);
+        pkt[idx++] = crc;
+    }
+
+    Serial.write(pkt, idx);
+    if (wifi_ota_is_client_connected())
+    {
+        wifi_ota_write(pkt, idx);
     }
 
     delayMicroseconds(MSP_RESPONSE_DELAY_US);
@@ -393,9 +405,21 @@ void MspProcessor::process_status_command(uint8_t protocol_version)
     payload[2] = i2cErrors & 0xFF;
     payload[3] = (i2cErrors >> 8) & 0xFF;
 
-    // Sensors present (bitmask): 1 = ACC, 2 = BARO, 4 = MAG, 8 = SONAR, 16 = GPS, 32 = OPTIC_FLOW
-    // MPU6050/6500 provides acc and gyro.
-    payload[4] = MSP_STATUS_ACCEL_SENSOR_FLAG | MSP_STATUS_GYRO_SENSOR_FLAG; // ACCELEROMETER | GYROSCOPE
+    // Sensors present (bitmask): 1 = ACC, 2 = BARO, 4 = MAG, 8 = SONAR, 16 = GPS, 32 = GYRO
+    uint8_t sensor_flags = MSP_STATUS_ACCEL_SENSOR_FLAG | MSP_STATUS_GYRO_SENSOR_FLAG;
+    if (_imuTask && _imuTask->getImuSensor().isBaroHealthy())
+    {
+        sensor_flags |= MSP_STATUS_BARO_SENSOR_FLAG;
+    }
+    if (_imuTask && _imuTask->getImuSensor().isMagHealthy())
+    {
+        sensor_flags |= MSP_STATUS_MAG_SENSOR_FLAG;
+    }
+    if (gpsManager.getData().last_update_ms > 0)
+    {
+        sensor_flags |= MSP_STATUS_GPS_SENSOR_FLAG;
+    }
+    payload[4] = sensor_flags;
 
     uint32_t flight_mode_flags = 0;
     if (_pidTask->getFlightMode() == FlightMode::ANGLE || _pidTask->getFlightMode() == FlightMode::STABILIZED)
@@ -443,11 +467,21 @@ void MspProcessor::process_raw_imu_command(uint8_t protocol_version)
     payload[10] = gyroZ & 0xFF;
     payload[11] = (gyroZ >> 8) & 0xFF;
 
-    // Mag (Magnetometer) - Not implemented yet, send zeros
-    for (uint8_t i = 0; i < MSP_RAW_IMU_MAG_BYTES; i++)
+    // Mag (Magnetometer) in uT
+    int16_t magX = 0, magY = 0, magZ = 0;
+    if (_imuTask)
     {
-        payload[12 + i] = 0;
+        ImuData d = _imuTask->getImuSensor().getData();
+        magX = static_cast<int16_t>(d.magX);
+        magY = static_cast<int16_t>(d.magY);
+        magZ = static_cast<int16_t>(d.magZ);
     }
+    payload[12] = magX & 0xFF;
+    payload[13] = (magX >> 8) & 0xFF;
+    payload[14] = magY & 0xFF;
+    payload[15] = (magY >> 8) & 0xFF;
+    payload[16] = magZ & 0xFF;
+    payload[17] = (magZ >> 8) & 0xFF;
 
     send_msp_response(MSP_RAW_IMU, payload, sizeof(payload), protocol_version);
 }
@@ -494,6 +528,13 @@ void MspProcessor::process_attitude_command(uint8_t protocol_version)
     ImuQuaternionData q = _imuTask->getImuSensor().getQuaternion();
     float roll_f, pitch_f, yaw_f;
     quaternionToEuler(q.w, q.x, q.y, q.z, &roll_f, &pitch_f, &yaw_f);
+
+    // Automatically apply Kinematic GPS True North Yaw Alignment when moving > 1.5 m/s
+    float aligned_yaw;
+    if (gpsManager.getKinematicYawAlignment(yaw_f, aligned_yaw))
+    {
+        yaw_f = aligned_yaw;
+    }
 
     int16_t roll = static_cast<int16_t>(roll_f * MSP_ATTITUDE_SCALE_FACTOR);
     int16_t pitch = static_cast<int16_t>(pitch_f * MSP_ATTITUDE_SCALE_FACTOR);
@@ -978,7 +1019,16 @@ void MspProcessor::process_status_ex_command(uint8_t protocol_version)
 
 void MspProcessor::process_altitude_command(uint8_t protocol_version)
 {
-    uint8_t payload[6] = {0}; // int32_t alt, int16_t vario
+    int32_t alt_cm = 0;
+    int16_t vario_cms = 0;
+    if (_imuTask)
+    {
+        ImuData d = _imuTask->getImuSensor().getData();
+        alt_cm = static_cast<int32_t>(d.altitude * 100.0f);
+    }
+    uint8_t payload[6];
+    memcpy(&payload[0], &alt_cm, 4);
+    memcpy(&payload[4], &vario_cms, 2);
     send_msp_response(MSP_ALTITUDE, payload, sizeof(payload), protocol_version);
 }
 
@@ -987,6 +1037,28 @@ void MspProcessor::process_analog_command(uint8_t protocol_version)
     uint8_t payload[7] = {0}; // vbat, intPowerMeterSum, rssi, amperage
     send_msp_response(MSP_ANALOG, payload, sizeof(payload), protocol_version);
 }
+
+void MspProcessor::process_flight32_env_command(uint8_t protocol_version)
+{
+    float temp_c = 0.0f;
+    float pressure_hpa = 1013.25f;
+    float alt_m = 0.0f;
+    if (_imuTask)
+    {
+        ImuData d = _imuTask->getImuSensor().getData();
+        temp_c = d.temp;
+        pressure_hpa = d.pressure;
+        alt_m = d.altitude;
+    }
+
+    uint8_t payload[12];
+    memcpy(&payload[0], &temp_c, 4);
+    memcpy(&payload[4], &pressure_hpa, 4);
+    memcpy(&payload[8], &alt_m, 4);
+
+    send_msp_response(MSP_FLIGHT32_ENV, payload, sizeof(payload), protocol_version);
+}
+
 
 void MspProcessor::process_battery_state_command(uint8_t protocol_version)
 {
@@ -1112,6 +1184,9 @@ void MspProcessor::process_msp_command(uint8_t command, const uint8_t *payload, 
         break;
     case MSP_MEM_STATS:
         process_mem_stats_command(protocol_version);
+        break;
+    case MSP_FLIGHT32_ENV:
+        process_flight32_env_command(protocol_version);
         break;
     case MSP_IDENT:
         process_ident_command(protocol_version);

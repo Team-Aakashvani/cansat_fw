@@ -56,6 +56,11 @@ void ImuTask::run()
     _filtered_imu_data.accelY = raw_imu_data.accelY;
     _filtered_imu_data.accelZ = raw_imu_data.accelZ;
     _filtered_imu_data.temp = raw_imu_data.temp;
+    _filtered_imu_data.magX = raw_imu_data.magX;
+    _filtered_imu_data.magY = raw_imu_data.magY;
+    _filtered_imu_data.magZ = raw_imu_data.magZ;
+    _filtered_imu_data.pressure = raw_imu_data.pressure;
+    _filtered_imu_data.altitude = raw_imu_data.altitude;
 
     // Apply filters to gyro data
     float raw_gyros[NUM_AXES] = {raw_imu_data.gyroX, raw_imu_data.gyroY, raw_imu_data.gyroZ};

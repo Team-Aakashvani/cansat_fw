@@ -19,7 +19,7 @@ void RxIbusProtocol::begin(uint8_t rx_pin)
 
 bool RxIbusProtocol::updateChannels()
 {
-    _ibus.read();
+    _ibus.getChannels();
     return true;
 }
 
@@ -30,5 +30,5 @@ int16_t RxIbusProtocol::getChannelValue(uint8_t channel)
 
 bool RxIbusProtocol::isConnected()
 {
-    return !_ibus.hasFailsafe();
+    return !_ibus.isFailsafe();
 }

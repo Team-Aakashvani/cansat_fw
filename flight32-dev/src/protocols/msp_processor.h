@@ -78,6 +78,7 @@ private:
     void process_status_ex_command(uint8_t protocol_version);
     void process_altitude_command(uint8_t protocol_version);
     void process_analog_command(uint8_t protocol_version);
+    void process_flight32_env_command(uint8_t protocol_version);
     void process_battery_state_command(uint8_t protocol_version);
     void process_osd_config_command(uint8_t protocol_version);
     void process_vtx_config_command(uint8_t protocol_version);

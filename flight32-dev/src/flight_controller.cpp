@@ -14,6 +14,7 @@
 #include "config/pid_config.h"
 
 #include "settings_manager.h"
+#include "network/wifi_ota_manager.h"
 
 #include "tasks/imu_task.h"
 #include "imu/sensors/imu_mpu6050.h"
@@ -21,6 +22,8 @@
 #include "tasks/rx_task.h"
 
 #include "tasks/com_manager_task.h" // Include the new ComManagerTask header
+#include "network/wifi_ota_manager.h"
+#include "gps/gps_manager.h"
 #include <Wire.h>
 
 // Helper function to convert SystemState enum to a string for logging.
@@ -196,23 +199,24 @@ void FlightController::setup()
 
     if (!_imu_sensor->begin(false, ImuGyroRangeIndex::GYRO_RANGE_2000DPS, ImuAccelRangeIndex::ACCEL_RANGE_16G, lpf_bandwidth))
     {
-        // Error message is already printed in the sensor's begin() method.
-        handleFatalError("IMU initialization failed. Halting execution.");
+        com_send_log(ComMessageType::LOG_WARN, "IMU initialization failed (bench test mode without sensor). Continuing boot...");
     }
+    else
+    {
+        ImuAxisData gyro_offsets = _settings_manager.getGyroOffsets();
+        ImuAxisData accel_offsets = _settings_manager.getAccelOffsets();
 
-    ImuAxisData gyro_offsets = _settings_manager.getGyroOffsets();
-    ImuAxisData accel_offsets = _settings_manager.getAccelOffsets();
+        setSystemState(SystemState::CALIBRATING);
 
-    setSystemState(SystemState::CALIBRATING);
+        _imu_sensor->calibrate();
 
-    _imu_sensor->calibrate();
+        // Save new offsets to settings.
+        _settings_manager.setGyroOffsets(_imu_sensor->getGyroscopeOffset());
+        _settings_manager.setAccelOffsets(_imu_sensor->getAccelerometerOffset());
+        _settings_manager.saveSettings();
 
-    // Save new offsets to settings.
-    _settings_manager.setGyroOffsets(_imu_sensor->getGyroscopeOffset());
-    _settings_manager.setAccelOffsets(_imu_sensor->getAccelerometerOffset());
-    _settings_manager.saveSettings();
-
-    com_send_log(ComMessageType::LOG_INFO, "IMU calibration complete and offsets saved.");
+        com_send_log(ComMessageType::LOG_INFO, "IMU calibration complete and offsets saved.");
+    }
 
     // Create FreeRTOS task objects.
     _com_manager_task = std::make_unique<ComManagerTask>(COM_TASK_NAME, COM_TASK_STACK_SIZE, COM_TASK_PRIORITY, COM_TASK_CORE, COM_TASK_DELAY_MS);
@@ -239,6 +243,9 @@ void FlightController::setup()
     }
 
     setSystemState(SystemState::READY);
+
+    // Initialize GPS UART1 on GPIO 13 (RX) and GPIO 14 (TX)
+    gpsManager.begin(9600);
 
     _scheduler.start(); // Start the FreeRTOS scheduler, beginning task execution.
 

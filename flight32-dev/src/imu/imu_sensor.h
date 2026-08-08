@@ -20,6 +20,9 @@ struct ImuData
     float gyroX, gyroY, gyroZ;
     float angleX, angleY; // New: Roll and Pitch angles
     float temp;
+    float magX, magY, magZ; // Magnetometer (uT)
+    float pressure;         // Barometric Pressure (hPa)
+    float altitude;         // Estimated Altitude (m)
 };
 
 // A structure to hold 3-axis data
@@ -65,6 +68,8 @@ public:
     virtual ImuQuaternionData getQuaternion() const { return {0, 0, 0, 0}; };
     virtual uint16_t getI2CErrorCount() const = 0;
     virtual bool isSensorHealthy() const = 0;
+    virtual bool isBaroHealthy() const { return false; }
+    virtual bool isMagHealthy() const { return false; }
 
 protected:
     ImuData _data = {};
