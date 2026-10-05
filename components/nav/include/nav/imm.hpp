@@ -60,10 +60,13 @@ struct ModelUpdateRecord {
 class IMMFilter {
 public:
 
-    ErrorStateEKF models[N_REGIMES];
-    double        mu[N_REGIMES];
-    double        c_bar[N_REGIMES];   ///< Predicted mode probabilities
-    double        last_log_lik;
+    ErrorStateEKF    models[N_REGIMES];
+    double           mu[N_REGIMES];
+    double           c_bar[N_REGIMES];   ///< Predicted mode probabilities
+    double           last_log_lik;
+    NavState         mixed_nav[N_REGIMES];
+    Mat<N_ERR,N_ERR> mixed_P[N_REGIMES];
+    IMMOutput        fused_out_{};
 
     IMMFilter() noexcept {
         // Initialise uniform prior
@@ -116,8 +119,6 @@ public:
                 mu_ij[i][j] = Pi[i][j] * mu[i] / c_bar[j];
 
         // Step 2: Mix states for each target model j
-        NavState mixed_nav[N_REGIMES];
-        Mat<N_ERR,N_ERR> mixed_P[N_REGIMES];
         for (int j = 0; j < N_REGIMES; ++j)
             mix_states(j, mu_ij, mixed_nav[j], mixed_P[j]);
 
@@ -195,8 +196,8 @@ public:
     // -----------------------------------------------------------------------
     // IMM fuse: probabilistic weighted mean (spread-of-means covariance)
     // -----------------------------------------------------------------------
-    IMMOutput fuse() const noexcept {
-        IMMOutput out{};
+    const IMMOutput& fuse() noexcept {
+        IMMOutput& out = fused_out_;
 
         // Linear state weighted mean
         Vec<3> p_f = Vec<3>::zero();

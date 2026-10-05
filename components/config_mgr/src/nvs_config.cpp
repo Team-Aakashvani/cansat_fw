@@ -159,6 +159,47 @@ esp_err_t NVSConfig::set_mag_cal(const float cal[3]) noexcept {
     return ret;
 }
 
+float NVSConfig::get_last_lat() const noexcept {
+    nvs_handle_t nvs;
+    float val = 21.1645f; // Default Surat latitude
+    if (open_ro(nvs) == ESP_OK) {
+        uint32_t raw = 0;
+        if (nvs_get_u32(nvs, "last_lat", &raw) == ESP_OK) {
+            memcpy(&val, &raw, sizeof(float));
+        }
+        nvs_close(nvs);
+    }
+    return val;
+}
+
+float NVSConfig::get_last_lon() const noexcept {
+    nvs_handle_t nvs;
+    float val = 72.7850f; // Default Surat longitude
+    if (open_ro(nvs) == ESP_OK) {
+        uint32_t raw = 0;
+        if (nvs_get_u32(nvs, "last_lon", &raw) == ESP_OK) {
+            memcpy(&val, &raw, sizeof(float));
+        }
+        nvs_close(nvs);
+    }
+    return val;
+}
+
+esp_err_t NVSConfig::set_last_pos(float lat, float lon) noexcept {
+    nvs_handle_t nvs;
+    esp_err_t ret = open_rw(nvs);
+    if (ret != ESP_OK) return ret;
+    uint32_t raw_lat, raw_lon;
+    memcpy(&raw_lat, &lat, sizeof(float));
+    memcpy(&raw_lon, &lon, sizeof(float));
+    nvs_set_u32(nvs, "last_lat", raw_lat);
+    nvs_set_u32(nvs, "last_lon", raw_lon);
+    ret = nvs_commit(nvs);
+    nvs_close(nvs);
+    ESP_LOGI(TAG, "Cached last GNSS position in NVS: lat=%.6f lon=%.6f", (double)lat, (double)lon);
+    return ret;
+}
+
 uint32_t NVSConfig::increment_boot_count() noexcept {
     nvs_handle_t nvs;
     uint32_t cnt = 0;

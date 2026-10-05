@@ -26,8 +26,10 @@ private:
 
     void process_line(char* line) noexcept;
     void print_help() noexcept;
+    void print_test_help() noexcept;
     void handle_get(int argc, char** argv) noexcept;
     void handle_set(int argc, char** argv) noexcept;
+    void handle_test(int argc, char** argv) noexcept;
     void handle_dispatch(const char* line) noexcept;
 };
 

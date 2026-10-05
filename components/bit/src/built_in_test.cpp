@@ -109,17 +109,18 @@ uint32_t BuiltInTest::test_power(hal::I2CBus& i2c) noexcept {
 }
 
 uint32_t BuiltInTest::test_gnss(hal::UARTBus& uart) noexcept {
-    // Wait up to 2s for any NMEA sentence
+    // Wait up to 300ms for any NMEA sentence
     char line[128];
-    for (int attempts = 0; attempts < 20; ++attempts) {
-        if (uart.read_line(line, sizeof(line), 100) > 0) {
+    for (int attempts = 0; attempts < 3; ++attempts) {
+        if (uart.read_line(line, sizeof(line), 50) > 0) {
             if (line[0] == '$') {
                 ESP_LOGI(TAG, "[BIT] GNSS: PASS (got NMEA)");
                 return 0;
             }
         }
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
-    ESP_LOGW(TAG, "[BIT] GNSS: no NMEA sentence in 2s");
+    ESP_LOGW(TAG, "[BIT] GNSS: no NMEA sentence detected");
     return BIT_GNSS_NO_NMEA;
 }
 

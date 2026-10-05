@@ -4,6 +4,8 @@
  */
 #include "watchdog/watchdog.hpp"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char* TAG = "WDT";
 
@@ -31,7 +33,7 @@ esp_err_t Watchdog::init(bool panic_on_timeout) noexcept {
 }
 
 esp_err_t Watchdog::register_task() noexcept {
-    esp_err_t ret = esp_task_wdt_add(nullptr);  // nullptr = current task
+    esp_err_t ret = esp_task_wdt_add(xTaskGetCurrentTaskHandle());
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "WDT register_task failed: %d", ret);
     }
@@ -39,7 +41,7 @@ esp_err_t Watchdog::register_task() noexcept {
 }
 
 void Watchdog::deregister_task() noexcept {
-    esp_task_wdt_delete(nullptr);
+    esp_task_wdt_delete(xTaskGetCurrentTaskHandle());
 }
 
 void Watchdog::ping() noexcept {

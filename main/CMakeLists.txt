@@ -7,7 +7,7 @@ idf_component_register(
     REQUIRES
         nav
         drivers
-        hal
+        app_hal
         control
         telemetry
         logging
@@ -17,6 +17,8 @@ idf_component_register(
         bit
         rf_mapping
         cli
+        comms
+        app_update
         freertos
         esp_common
         esp_hw_support
@@ -25,6 +27,7 @@ idf_component_register(
         nvs_flash
         spi_flash
         driver
+        esp_driver_usb_serial_jtag
         sdmmc
         fatfs
         log

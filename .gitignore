@@ -37,3 +37,6 @@ managed_components/
 .cproject
 .project
 .settings/
+
+# Runtime caches written by the dock / 3D server
+tools/latest_telemetry.json

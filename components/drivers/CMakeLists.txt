@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "src/bno085.cpp"
+        "src/imu_attitude.cpp"
         "src/bmp585.cpp"
         "src/ngps01.cpp"
         "src/sdp31.cpp"
@@ -8,10 +9,11 @@ idf_component_register(
         "src/sht4x.cpp"
         "src/ina260.cpp"
         "src/max17048.cpp"
+        "src/cc1101.cpp"
     INCLUDE_DIRS
         "include"
     REQUIRES
-        hal
+        app_hal
         nav
         driver
         esp_common

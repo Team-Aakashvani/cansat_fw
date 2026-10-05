@@ -5,24 +5,22 @@
 #include "cli/console.hpp"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 
+#include "cli/test_suite.hpp"
 static const char* TAG = "CLI";
 
 namespace cli {
 
 void Console::run() noexcept {
     char line[128];
-    printf("\nAAKASHVANI CLI v1.0\n");
-    printf("Type 'help' for commands.\n");
-
     while (true) {
-        printf("\n> ");
-        fflush(stdout);
-
         if (fgets(line, sizeof(line), stdin) == nullptr) {
+            vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
 
@@ -38,7 +36,7 @@ void Console::run() noexcept {
 void Console::process_line(char* line) noexcept {
     // Copy for dispatch before tokenizing if needed
     char original[128];
-    strncpy(original, line, sizeof(original));
+    snprintf(original, sizeof(original), "%s", line);
 
     char* argv[10];
     int argc = 0;
@@ -50,8 +48,22 @@ void Console::process_line(char* line) noexcept {
 
     if (argc == 0) return;
 
+    if (strncmp(original, "CMD,", 4) == 0 || strncmp(original, "cmd,", 4) == 0 ||
+        strcasecmp(argv[0], "SIM") == 0 || strcasecmp(argv[0], "SIMP") == 0 ||
+        strcasecmp(argv[0], "SIMG") == 0 || strcasecmp(argv[0], "SIMI") == 0 ||
+        strcasecmp(argv[0], "CAL") == 0 || strcasecmp(argv[0], "CX") == 0 ||
+        strcasecmp(argv[0], "MTR") == 0 || strcasecmp(argv[0], "MOTOR") == 0 ||
+        strcasecmp(argv[0], "PID") == 0 ||
+        strcasecmp(argv[0], "ABORT") == 0 || strcasecmp(argv[0], "CHUTE") == 0 ||
+        strcasecmp(argv[0], "RTL") == 0 || strcasecmp(argv[0], "ST") == 0) {
+        handle_dispatch(original);
+        return;
+    }
+
     if (strcmp(argv[0], "help") == 0) {
         print_help();
+    } else if (strcmp(argv[0], "test") == 0) {
+        handle_test(argc, argv);
     } else if (strcmp(argv[0], "get") == 0) {
         handle_get(argc, argv);
     } else if (strcmp(argv[0], "set") == 0) {
@@ -67,19 +79,70 @@ void Console::process_line(char* line) noexcept {
         printf("Ground Alt: %.2f m\n", (double)nvs_.get_ground_alt_m());
         printf("BIT Override: %s\n", nvs_.get_bit_override() ? "ENABLED" : "disabled");
     } else {
-        printf("Unknown command: %s. Type 'help'.\n", argv[0]);
+        printf("Unknown command: %s. Type 'help' or 'test --help'.\n", argv[0]);
     }
 }
 
 void Console::print_help() noexcept {
     printf("Available commands:\n");
     printf("  help                - Show this help\n");
+    printf("  test --help         - Show hardware & algorithm diagnostic test modes\n");
     printf("  status              - Show system status\n");
     printf("  get <key>           - Get NVS config value\n");
     printf("  set <key> <val...>  - Set NVS config value (use 3 vals for mag_cal)\n");
     printf("  dispatch <raw_cmd>  - Inject a LoRa-style command\n");
     printf("  reboot              - Restart the ESP32\n");
     printf("\nNVS Keys: team_id, ground_alt, baro_offset, bit_override, mag_cal\n");
+}
+
+void Console::print_test_help() noexcept {
+    printf("\n========================================================================\n");
+    printf("      AAKASHWANI CAN-7USAT HARDWARE & ALGORITHM TEST MODES              \n");
+    printf("========================================================================\n");
+    printf("  test --help             : Show this testing command options menu\n");
+    printf("  test --alt-led          : Live Altitude Height Check via Onboard WS2812\n");
+    printf("                            (Lift CanSat >= 0.25m -> Orange, Apogee -> Purple, Land -> Red)\n");
+    printf("  test --led-scan         : Scan all ESP32 candidate GPIOs to find onboard discrete LED\n");
+    printf("  test --bit              : Run Built-In Self-Test (IMU, Baro, GPS, XBee, SD)\n");
+    printf("  test --sensors          : Live streaming readout of all 4 I2C sensors\n");
+    printf("  test --motor <0-25>     : Test HakRC ESC1 motor spin (GPIO 14) at %% throttle\n");
+    printf("  test --stop             : Stop any running continuous test mode\n");
+    printf("========================================================================\n\n");
+}
+
+void Console::handle_test(int argc, char** argv) noexcept {
+    if (argc < 2 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "help") == 0) {
+        print_test_help();
+        return;
+    }
+
+    if (strcmp(argv[1], "--bit") == 0 || strcmp(argv[1], "bit") == 0) {
+        printf("\n[TEST] Triggering System Built-In Self-Test (BIT)...\n");
+        test_suite::run_test_bit();
+    } else if (strcmp(argv[1], "--alt-led") == 0 || strcmp(argv[1], "alt-led") == 0 || strcmp(argv[1], "--height") == 0) {
+        printf("\n[TEST] Starting Altitude Height Check Test with Flight Mission State Machine...\n");
+        printf("       Lift CanSat >= 0.25m above desk. Type 'test --stop' to exit.\n");
+        test_suite::run_test_alt_led(true);
+    } else if (strcmp(argv[1], "--led-scan") == 0 || strcmp(argv[1], "led-scan") == 0 || strcmp(argv[1], "--leds") == 0) {
+        test_suite::run_test_led_scan();
+    } else if (strcmp(argv[1], "--sensors") == 0 || strcmp(argv[1], "sensors") == 0) {
+        printf("\n[TEST] Streaming 4x I2C sensor constellation readings. Type 'test --stop' to exit.\n");
+        test_suite::run_test_sensors(true);
+    } else if (strcmp(argv[1], "--motor") == 0 || strcmp(argv[1], "motor") == 0) {
+        float pct = (argc >= 3) ? (float)atof(argv[2]) : 5.0f;
+        if (pct < 0.0f) pct = 0.0f;
+        if (pct > 25.0f) {
+            printf("[SAFETY] Bench throttle capped at 25%% without propellers!\n");
+            pct = 25.0f;
+        }
+        printf("\n[TEST] Testing HakRC ESC1 (GPIO 14) at %.1f%% throttle for 2.5 seconds...\n", (double)pct);
+        test_suite::run_test_motor(pct);
+    } else if (strcmp(argv[1], "--stop") == 0 || strcmp(argv[1], "stop") == 0) {
+        printf("\n[TEST] Stopping all active test modes. Restoring flight standby.\n");
+        test_suite::stop_all_tests();
+    } else {
+        printf("Unknown test option: '%s'. Type 'test --help' for options.\n", argv[1]);
+    }
 }
 
 void Console::handle_get(int argc, char** argv) noexcept {
@@ -144,36 +207,64 @@ void Console::handle_set(int argc, char** argv) noexcept {
 }
 
 void Console::handle_dispatch(const char* line) noexcept {
-    if (strlen(line) == 0) return;
+    if (!line || strlen(line) == 0) return;
     
     comms::UplinkCommand cmd{};
-    char tmp[64];
-    strncpy(tmp, line, sizeof(tmp));
-    char* comma = strchr(tmp, ',');
-    
-    if (comma) {
-        *comma = '\0';
-        strncpy(cmd.arg, comma + 1, sizeof(cmd.arg) - 1);
+    char tmp[128];
+    snprintf(tmp, sizeof(tmp), "%s", line);
+    char* p = tmp;
+
+    // Skip "CMD," prefix if present
+    if (strncmp(p, "CMD,", 4) == 0 || strncmp(p, "cmd,", 4) == 0) {
+        p += 4;
     }
 
-    if      (strcmp(tmp, "CX") == 0)    cmd.type = comms::CommandType::CX;
-    else if (strcmp(tmp, "ST") == 0)    cmd.type = comms::CommandType::ST;
-    else if (strcmp(tmp, "CAL") == 0)   cmd.type = comms::CommandType::CAL;
-    else if (strcmp(tmp, "SIM") == 0)   cmd.type = comms::CommandType::SIM;
-    else if (strcmp(tmp, "SIMP") == 0)  cmd.type = comms::CommandType::SIMP;
-    else if (strcmp(tmp, "SIMG") == 0)  cmd.type = comms::CommandType::SIMG;
-    else if (strcmp(tmp, "SIMI") == 0)  cmd.type = comms::CommandType::SIMI;
-    else if (strcmp(tmp, "ABORT") == 0) cmd.type = comms::CommandType::ABORT;
-    else if (strcmp(tmp, "CHUTE") == 0) cmd.type = comms::CommandType::CHUTE;
-    else if (strcmp(tmp, "RTL") == 0)   cmd.type = comms::CommandType::RTL;
-    else if (strcmp(tmp, "MAP") == 0)   cmd.type = comms::CommandType::MAP;
-    else if (strcmp(tmp, "OTA") == 0)   cmd.type = comms::CommandType::OTA;
+    char* saveptr = nullptr;
+    char* tok = strtok_r(p, ", ", &saveptr);
+    if (!tok) return;
+
+    // Skip optional team_id (e.g. "1234")
+    unsigned team_id = 0;
+    if (sscanf(tok, "%u", &team_id) == 1 && (team_id == (unsigned)nav::TELEM_CFG.team_id || team_id == 0 || team_id == 1234)) {
+        tok = strtok_r(nullptr, ", ", &saveptr);
+        if (!tok) return;
+    }
+
+    if      (strcasecmp(tok, "CX") == 0)    cmd.type = comms::CommandType::CX;
+    else if (strcasecmp(tok, "ST") == 0)    cmd.type = comms::CommandType::ST;
+    else if (strcasecmp(tok, "CAL") == 0)   cmd.type = comms::CommandType::CAL;
+    else if (strcasecmp(tok, "SIM") == 0)   cmd.type = comms::CommandType::SIM;
+    else if (strcasecmp(tok, "SIMP") == 0)  cmd.type = comms::CommandType::SIMP;
+    else if (strcasecmp(tok, "SIMG") == 0)  cmd.type = comms::CommandType::SIMG;
+    else if (strcasecmp(tok, "SIMI") == 0)  cmd.type = comms::CommandType::SIMI;
+    else if (strcasecmp(tok, "ABORT") == 0) cmd.type = comms::CommandType::ABORT;
+    else if (strcasecmp(tok, "CHUTE") == 0) cmd.type = comms::CommandType::CHUTE;
+    else if (strcasecmp(tok, "RTL") == 0)   cmd.type = comms::CommandType::RTL;
+    else if (strcasecmp(tok, "MTR") == 0 || strcasecmp(tok, "MOTOR") == 0) cmd.type = comms::CommandType::MTR;
+    else if (strcasecmp(tok, "PID") == 0)                                   cmd.type = comms::CommandType::PID;
+    else if (strcasecmp(tok, "MAP") == 0)   cmd.type = comms::CommandType::MAP;
+    else if (strcasecmp(tok, "OTA") == 0)   cmd.type = comms::CommandType::OTA;
+    else if (strcasecmp(tok, "TARE") == 0)  cmd.type = comms::CommandType::TARE;
     else {
-        printf("Unknown command type: %s\n", tmp);
+        printf("Unknown command type: %s\n", tok);
         return;
     }
 
-    printf("Dispatching command %s...\n", tmp);
+    tok = strtok_r(nullptr, "\r\n", &saveptr);
+    if (tok) {
+        while (*tok == ',' || *tok == ' ') tok++;
+        // Remove trailing CRC if present
+        char* last_comma = strrchr(tok, ',');
+        if (last_comma && strlen(last_comma + 1) == 4) {
+            *last_comma = '\0';
+        }
+        strncpy(cmd.arg, tok, sizeof(cmd.arg) - 1);
+        cmd.arg[sizeof(cmd.arg) - 1] = '\0';
+    } else {
+        cmd.arg[0] = '\0';
+    }
+
+    printf("[CMD] Executing: %s (%s)\n", line, cmd.arg);
     parser_.dispatch(cmd);
 }
 

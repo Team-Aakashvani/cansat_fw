@@ -16,5 +16,5 @@ idf_component_register(
         esp_timer
         freertos
     PRIV_REQUIRES
-        esp_coredump
+        espcoredump
 )

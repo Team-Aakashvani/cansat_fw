@@ -21,8 +21,8 @@
 namespace nav {
 
 struct AdaptState {
-    double R0[MAX_MEAS_DIM][MAX_MEAS_DIM];
-    double C[MAX_MEAS_DIM][MAX_MEAS_DIM];   ///< Running EMA of innovation cov
+    double r0_cov[MAX_MEAS_DIM][MAX_MEAS_DIM];
+    double innov_cov[MAX_MEAS_DIM][MAX_MEAS_DIM];   ///< Running EMA of innovation cov
     int    meas_dim = 1;
     int    n = 0;
 
@@ -31,8 +31,8 @@ struct AdaptState {
         n = 0;
         for (int i = 0; i < MAX_MEAS_DIM; ++i)
             for (int j = 0; j < MAX_MEAS_DIM; ++j) {
-                R0[i][j] = (i == j && i < M) ? r0_diag[i] : 0.0;
-                C[i][j]  = R0[i][j];
+                r0_cov[i][j] = (i == j && i < M && r0_diag != nullptr) ? r0_diag[i] : 0.0;
+                innov_cov[i][j]  = r0_cov[i][j];
             }
     }
 };
@@ -70,12 +70,12 @@ public:
         // Ĉ ← (1−α)·Ĉ + α·ν·νᵀ
         for (int i = 0; i < M; ++i)
             for (int j = 0; j < M; ++j)
-                st.C[i][j] = (1.0-alpha)*st.C[i][j] + alpha*innov[i]*innov[j];
+                st.innov_cov[i][j] = (1.0-alpha)*st.innov_cov[i][j] + alpha*innov[i]*innov[j];
         // Force symmetry
         for (int i = 0; i < M; ++i)
             for (int j = i+1; j < M; ++j) {
-                double avg = 0.5*(st.C[i][j]+st.C[j][i]);
-                st.C[i][j] = st.C[j][i] = avg;
+                double avg = 0.5*(st.innov_cov[i][j]+st.innov_cov[j][i]);
+                st.innov_cov[i][j] = st.innov_cov[j][i] = avg;
             }
         st.n++;
     }
@@ -91,9 +91,9 @@ public:
         const double Rmin = ESTIMATOR_CFG.adaptive_R_min_factor;
         const double Rmax = ESTIMATOR_CFG.adaptive_R_max_factor;
         for (int i = 0; i < M; ++i) {
-            const double lo = st.R0[i][i] * Rmin;
-            const double hi = st.R0[i][i] * Rmax;
-            double val = st.C[i][i];
+            const double lo = st.r0_cov[i][i] * Rmin;
+            const double hi = st.r0_cov[i][i] * Rmax;
+            double val = st.innov_cov[i][i];
             if (val < lo) val = lo;
             if (val > hi) val = hi;
             r_out[i] = val;

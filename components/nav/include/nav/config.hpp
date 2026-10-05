@@ -39,6 +39,7 @@ constexpr double PI             = 3.14159265358979323846;
 
 constexpr int N_NAV = 16;  ///< Nav state size: [p(3) v(3) q(4) ba(3) bg(3)]
 constexpr int N_ERR = 15;  ///< Error state size: [δp δv δθ δba δbg] all ×3
+constexpr int MAX_MEAS_DIM = 6; ///< Maximum measurement vector dimension
 
 // Error-state slice offsets (0-indexed)
 constexpr int EIDX_P_0  = 0;   constexpr int EIDX_P_END  = 3;
@@ -186,6 +187,18 @@ struct EstimatorConfig {
     int    sprt_window_samples       = 10;
     double analytical_redundancy_tol_mps = 6.0;
 
+    // Innovation gating (state protection): a sample whose NIS = νᵀS⁻¹ν exceeds
+    // the gate is NOT fused, so it cannot overwrite the last valid state.
+    double baro_gate_chi2            = 16.0;  ///< 1 dof, ~4σ  (P_false ≈ 6e-5)
+    double gnss_gate_chi2            = 25.0;  ///< 6 dof, ~99.97%
+    // Re-sync: if a sensor is rejected continuously for resync_after_s while its
+    // sample-to-sample noise stays nominal (RMS of successive innovation
+    // differences < resync_noise_max·σ_R; white noise ≈ 1.41), the sensor is
+    // judged healthy and the *prediction* diverged -> covariance is inflated and
+    // the sensor re-adopted. Erratic data keeps being rejected.
+    double resync_after_s            = 3.0;
+    double resync_noise_max          = 4.0;
+
     // Sensor health
     double health_smoothing_tau_s    = 1.0;
     double health_floor              = 0.02;
@@ -240,13 +253,17 @@ struct SupervisorConfig {
     double landed_posterior_threshold  = 0.95;
     double landed_confirm_s            = 1.00;
 
-    // Launch detection (independent multi-channel)
-    double launch_baseline_s           = 1.0;
-    double launch_specific_force_excess_mps2 = 9.0;  ///< ~0.92g above bias
-    double launch_altitude_rise_m      = 2.0;
-    double launch_vertical_vel_mps     = 3.0;
-    double launch_persist_s            = 0.15;        ///< 150ms per channel
-    double launch_hard_specific_force_mps2 = 25.0;   ///< No-doubt override
+    // Dynamic launch detection & statistical discrimination
+    double launch_baseline_s           = 1.0;         ///< Pad calibration baseline window
+    double launch_hard_specific_force_mps2 = 25.0;    ///< Unmistakable launch override (>2.5g)
+    double launch_jerk_launch_mps3     = 35.0;        ///< Ignition shock threshold (elevator max 1.5 m/s³)
+    double launch_jerk_alpha           = 0.25;        ///< 1st order LP filter coefficient for jerk
+    double launch_delta_v_launch_mps   = 5.0;         ///< Leaky specific-force momentum threshold (m/s)
+    double launch_leak_lambda          = 1.20;        ///< 1/s dissipation rate for momentum leak
+    double launch_deadband_mps2        = 2.0;         ///< ~0.2g floor for noise/handling
+    double elevator_min_hdot_mps       = 0.8;         ///< Min baro climb rate for elevator interlock (m/s)
+    double elevator_max_imu_dv_mps     = 1.5;         ///< Max allowable IMU Delta-V during elevator motion (m/s)
+    double boost_min_duration_s        = 0.25;        ///< Minimum boost phase duration before burnout check
 
     // VS-IMM soft gating
     double vs_gate_soft_floor          = 0.05;
@@ -327,33 +344,28 @@ static constexpr ControlConfig CONTROL_CFG{};
 // ===========================================================================
 
 struct PinConfig {
-    // I2C Bus 0 (BNO085 + BMP585)
-    int i2c0_sda = 8;
-    int i2c0_scl = 9;
+    // I2C Bus 0 & 1 (All I2C sensors share standard ESP32-S3 I2C pins)
+    int i2c0_sda = 38;
+    int i2c0_scl = 39;
 
-    // I2C Bus 1 (SDP31 + SGP41 + SHT4x + INA260 + MAX17048)
-    int i2c1_sda = 10;
-    int i2c1_scl = 11;
+    int i2c1_sda = 38;
+    int i2c1_scl = 39;
 
     // SPI Bus (Shared — CC1101)
-    int spi_mosi = 35;
-    int spi_miso = 37;
-    int spi_sck  = 36;
-    int cc1101_cs = 21;  ///< RF scanner CS
+    int spi_mosi = 23;
+    int spi_miso = 19;
+    int spi_sck  = 18;
+    int cc1101_cs = 5;  ///< RF scanner CS
 
-    // UART3 (XBee Pro Radio)
-    int xbee_tx  = 34;
-    int xbee_rx  = 32;
+    // UART2 (XBee Pro Radio)
+    int xbee_tx  = 17;
+    int xbee_rx  = 16;
 
     // UART1 (N-GS-01 NavIC GNSS)
-    int gnss_tx  = 17;
-    int gnss_rx  = 18;
+    int gnss_tx  = 21;
+    int gnss_rx  = 13;
 
-    // Unassigned (previously ESP32-P4 Media Coprocessor)
-    int unassigned_26 = 26;
-    int unassigned_27 = 27;
-
-    // SDMMC (SD card logging)
+    // SD card (SPI mode / fallback)
     int sd_clk   = 14;
     int sd_cmd   = 15;
     int sd_d0    = 2;
@@ -362,19 +374,19 @@ struct PinConfig {
     int sd_d3    = 13;
 
     // PWM motors (LEDC channels 0-3)
-    int motor[4] = {5, 6, 7, 16};
+    int motor[4] = {25, 26, 32, 33};
 
     // Servo release (LEDC channel 4)
-    int servo    = 38;
+    int servo    = 4;
 
-    // Recovery beacon (GPIO output to transistor-driven buzzer)
-    int beacon   = 39;
+    // Recovery beacon
+    int beacon   = 12;
 
     // External power switch (active-high input)
-    int power_switch = 40;
+    int power_switch = 35;
 
     // LED indicator
-    int led_status = 48;  ///< ESP32-S3 onboard RGB
+    int led_status = 2;  ///< ESP32 onboard LED (GPIO 2)
 };
 static constexpr PinConfig PINS{};
 

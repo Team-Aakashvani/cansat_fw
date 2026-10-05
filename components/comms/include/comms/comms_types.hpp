@@ -24,7 +24,10 @@ enum class CommandType : uint8_t {
     CHUTE,    ///< Manual parachute deployment
     RTL,      ///< Return to Launch (controlled descent)
     MAP,      ///< RF mapping toggle
+    MTR,      ///< Motor direct test: MTR,<id|ALL>,<pct>
+    PID,      ///< Live attitude PID stabilization test: PID,START | PID,STOP
     OTA,      ///< OTA update: OTA,START | OTA,CHUNK,<hex> | OTA,FINISH | OTA,ABORT
+    TARE,     ///< Re-identify IMU mount, re-level and zero heading: TARE
 };
 
 struct UplinkCommand {

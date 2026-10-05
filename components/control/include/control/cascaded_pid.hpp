@@ -1,4 +1,6 @@
 #pragma once
+#include <cmath>
+#include <algorithm>
 
 namespace control {
 
@@ -24,31 +26,44 @@ public:
     void reset() {
         integral_ = 0.0f;
         prev_error_ = 0.0f;
+        first_run_ = true;
     }
 
     float update(float setpoint, float measurement, float dt) {
-        if (dt <= 0.0f) return 0.0f;
-
-        float error = setpoint - measurement;
-        
-        // Integral with limit
-        integral_ += error * dt;
-        if (gains_.i_limit > 0.0f) {
-            if (integral_ > gains_.i_limit) integral_ = gains_.i_limit;
-            else if (integral_ < -gains_.i_limit) integral_ = -gains_.i_limit;
+        if (dt <= 0.0f || !std::isfinite(setpoint) || !std::isfinite(measurement)) {
+            return 0.0f;
         }
 
-        // Derivative
-        float derivative = (error - prev_error_) / dt;
+        float error = setpoint - measurement;
+        if (!std::isfinite(error)) return 0.0f;
+        
+        // Integral with anti-windup limit
+        integral_ += error * dt;
+        const float limit = (gains_.i_limit > 0.0f) ? gains_.i_limit : 0.5f;
+        integral_ = std::clamp(integral_, -limit, limit);
+
+        // Derivative (with first-run spike suppression)
+        float derivative = 0.0f;
+        if (!first_run_ && std::isfinite(prev_error_)) {
+            derivative = (error - prev_error_) / dt;
+            if (!std::isfinite(derivative)) derivative = 0.0f;
+        }
+        first_run_ = false;
         prev_error_ = error;
 
-        return (gains_.kp * error) + (gains_.ki * integral_) + (gains_.kd * derivative);
+        float output = (gains_.kp * error) + (gains_.ki * integral_) + (gains_.kd * derivative);
+        if (!std::isfinite(output)) {
+            reset();
+            return 0.0f;
+        }
+        return output;
     }
 
 private:
     PIDGains gains_{0.0f, 0.0f, 0.0f, 0.0f};
-    float integral_ = 0.0f;
+    float integral_   = 0.0f;
     float prev_error_ = 0.0f;
+    bool  first_run_  = true;
 };
 
 /**
@@ -89,16 +104,40 @@ public:
      */
     Vector3 update(const Vector3& target_euler, const Vector3& current_euler, 
                    const Vector3& current_rates, float dt) {
-        // Outer loop: Angle to Rate
-        float roll_rate_sp = roll_angle_.update(target_euler.x, current_euler.x, dt);
-        float pitch_rate_sp = pitch_angle_.update(target_euler.y, current_euler.y, dt);
+        if (dt <= 0.0f || dt > 0.1f) dt = 0.01f;
+
+        // Comprehensive guard against any non-finite orientation or gyro inputs
+        if (!std::isfinite(current_euler.x) || !std::isfinite(current_euler.y) || !std::isfinite(current_euler.z) ||
+            !std::isfinite(current_rates.x) || !std::isfinite(current_rates.y) || !std::isfinite(current_rates.z)) {
+            reset();
+            return {0.0f, 0.0f, 0.0f};
+        }
+
+        // Wrap angle error to [-pi, +pi] and clamp to +/- 30 degrees (0.52 rad)
+        auto wrap_clamp_error = [](float sp, float meas) -> float {
+            if (!std::isfinite(sp) || !std::isfinite(meas)) return 0.0f;
+            float err = sp - meas;
+            while (err > 3.14159265f)  err -= 6.2831853f;
+            while (err < -3.14159265f) err += 6.2831853f;
+            return std::clamp(err, -0.5235f, 0.5235f);
+        };
+
+        float err_roll  = wrap_clamp_error(target_euler.x, current_euler.x);
+        float err_pitch = wrap_clamp_error(target_euler.y, current_euler.y);
+
+        // Outer loop: Angle error -> Rate Setpoint (clamped to +/- 2.0 rad/s)
+        float roll_rate_sp  = std::clamp(roll_angle_.update(err_roll, 0.0f, dt), -2.0f, 2.0f);
+        float pitch_rate_sp = std::clamp(pitch_angle_.update(err_pitch, 0.0f, dt), -2.0f, 2.0f);
         
-        // Inner loop: Rate to Torque
+        // Inner loop: Rate Error -> Differential Torque (clamped to +/- 0.15)
         Vector3 torque;
-        torque.x = roll_rate_.update(roll_rate_sp, current_rates.x, dt);
-        torque.y = pitch_rate_.update(pitch_rate_sp, current_rates.y, dt);
-        torque.z = yaw_rate_.update(target_euler.z, current_rates.z, dt); // Yaw is rate-controlled
+        torque.x = std::clamp(roll_rate_.update(roll_rate_sp, current_rates.x, dt), -0.15f, 0.15f);
+        torque.y = std::clamp(pitch_rate_.update(pitch_rate_sp, current_rates.y, dt), -0.15f, 0.15f);
+        torque.z = std::clamp(yaw_rate_.update(target_euler.z, current_rates.z, dt), -0.05f, 0.05f);
         
+        if (!std::isfinite(torque.x)) torque.x = 0.0f;
+        if (!std::isfinite(torque.y)) torque.y = 0.0f;
+        if (!std::isfinite(torque.z)) torque.z = 0.0f;
         return torque;
     }
 

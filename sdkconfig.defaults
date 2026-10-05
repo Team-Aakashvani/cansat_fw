@@ -1,115 +1,59 @@
 # ===========================================================================
-# sdkconfig.defaults — ESP32-S3 WROOM-1 release configuration
+# sdkconfig.defaults — ESP32-S3 release configuration
 # CAN-7USAT 2026 Flight Software
+#
+# sdkconfig is git-ignored, so this file is the ONLY build configuration a
+# fresh clone gets. Keep it in sync with the configuration flashed on the board.
+# Note: defaults only apply to keys missing from an existing sdkconfig; after
+# editing this file, delete sdkconfig (or run `idf.py reconfigure` from clean).
 # ===========================================================================
 
 # ---- Target ---------------------------------------------------------------
 CONFIG_IDF_TARGET="esp32s3"
 
 # ---- CPU & Clock ----------------------------------------------------------
-CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
-CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ=240
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
+
+# ---- Flash ----------------------------------------------------------------
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # ---- FreeRTOS SMP ---------------------------------------------------------
-# Enable dual-core SMP (Core 0 = RT tasks, Core 1 = System services)
+# 1 kHz tick: the 10 ms IMU/nav and 20 ms telemetry periods are exact
 CONFIG_FREERTOS_UNICORE=n
 CONFIG_FREERTOS_HZ=1000
-# Tick rate 1kHz → 1ms resolution; RT tasks run at sub-1ms via hardware timers.
-CONFIG_FREERTOS_ENABLE_BACKWARD_COMPATIBILITY=n
 CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
 CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
-# Stack overflow detection — canary method
 CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
 
-# ---- Memory ---------------------------------------------------------------
-CONFIG_SPIRAM_SUPPORT=y
-CONFIG_SPIRAM_USE_MALLOC=n            # No PSRAM in allocator; we control it.
-CONFIG_SPIRAM_MEMTEST=y
-CONFIG_SPIRAM_BOOT_INIT=y
-CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=n
-# 8 MB PSRAM connected via Octal SPI
-CONFIG_SPIRAM_MODE_OCT=y
-CONFIG_SPIRAM_SPEED_80M=y
-
 # ---- Watchdog -------------------------------------------------------------
-# Task Watchdog Timer
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_INIT=y
-# Interrupt Watchdog (catches ISR runaway)
 CONFIG_ESP_INT_WDT=y
 CONFIG_ESP_INT_WDT_TIMEOUT_MS=300
 
 # ---- Brownout Detection ---------------------------------------------------
 CONFIG_ESP_BROWNOUT_DET=y
-CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y   # ~2.76V threshold
 
 # ---- Logging --------------------------------------------------------------
-# Use UART0 for debug output during development
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
-CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
-# In flight operation, set to WARN to minimise UART latency
-# CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 
-# ---- NVS ------------------------------------------------------------------
-CONFIG_NVS_ENCRYPTION=n               # No secure boot in v1.0
-CONFIG_NVS_ASSERT_ERROR_CHECK=y
+# ---- Role -----------------------------------------------------------------
+CONFIG_ROLE_FC=y
+CONFIG_BIT_DEBUG_BYPASS=y
 
-# ---- SPI Flash / Filesystem -----------------------------------------------
-CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
-CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
-
-# ---- SD Card (SDMMC) -------------------------------------------------------
-CONFIG_SOC_SDMMC_USE_GPIO_MATRIX=y
-CONFIG_FATFS_LFN_HEAP=y
-CONFIG_FATFS_MAX_LFN=255
-CONFIG_FATFS_CODEPAGE_437=y
-
-# ---- Console Output -------------------------------------------------------
-# Use the built-in USB Serial/JTAG Controller for system logs.
-# This frees up UART0 for the P4 Media Coprocessor link.
+# ---- Console: native USB Serial/JTAG (the board's USB COM port) -----------
+# Primary console = USB-JTAG so stdin works (dock/CLI commands: CX, ST, TARE...).
+# As a *secondary* console USB-JTAG is output-only and every command is dropped.
+# main.cpp installs the buffered usb_serial_jtag driver, so printf never
+# busy-waits; with no host attached, output is dropped after a 50 ms timeout.
+# UART0 (GPIO43/44) carries no logs after boot.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
-CONFIG_ESP_CONSOLE_UART_CUSTOM=n
-CONFIG_ESP_CONSOLE_UART_NONE=n
-CONFIG_ESP_CONSOLE_UART_DEFAULT=n
-# UART0 baud is now managed by the P4 Link driver, not the console.
-
-# ---- I2C ------------------------------------------------------------------
-CONFIG_I2C_ISR_IRAM_SAFE=y
-
-# ---- SPI ------------------------------------------------------------------
-CONFIG_SPI_MASTER_ISR_IN_IRAM=y
-CONFIG_SPI_SLAVE_ISR_IN_IRAM=y
-
-# ---- LEDC (PWM) -----------------------------------------------------------
-CONFIG_LEDC_TIMER_SPECIFIC_API=y
-
-# ---- MCPWM ----------------------------------------------------------------
-# Used for precision motor control if LEDC resolution is insufficient
-CONFIG_SOC_MCPWM_SUPPORTED=y
-
-# ---- Power Management -----------------------------------------------------
-CONFIG_PM_ENABLE=n                    # Disable auto light-sleep; RT tasks need stable clock
-CONFIG_ESP_SLEEP_FLASH_LEAKAGE_WORKAROUND=y
-
-# ---- C++ Exception handling -----------------------------------------------
-# Disabled for deterministic embedded behaviour (no try/catch in hot path)
-CONFIG_COMPILER_CXX_EXCEPTIONS=n
-CONFIG_COMPILER_CXX_RTTI=n
-
-# ---- Compiler optimisation ------------------------------------------------
-CONFIG_COMPILER_OPTIMIZATION_PERF=y
-CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_ENABLE=y
-# Float ABI — use hardware FPU for single, soft-ABI for double
-CONFIG_COMPILER_FLOAT_LIB_FROM_GCCLIB=y
-
-# ---- IRAM placement -------------------------------------------------------
-# Place ISR-used functions in IRAM to avoid cache miss penalty
-CONFIG_ESP_SYSTEM_ALLOW_RTC_FAST_MEM_AS_HEAP=n  # Reserve for mission latches
-
-# ---- RTC Fast Memory -------------------------------------------------------
-# Used exclusively for irreversible MissionLatches structure (supervisor.hpp)
-# Do NOT place heap here — it must be reserved for latch persistence across resets.

@@ -47,6 +47,9 @@ public:
     bool     get_bit_override()   const noexcept;
     void     get_mag_cal(float out[3]) const noexcept;
 
+    float    get_last_lat()       const noexcept;
+    float    get_last_lon()       const noexcept;
+
     // ----- Setters -----------------------------------------------------------
 
     esp_err_t set_team_id       (uint16_t id)         noexcept;
@@ -54,6 +57,7 @@ public:
     esp_err_t set_baro_offset_pa(float offset_pa)     noexcept;
     esp_err_t set_bit_override  (bool enable)         noexcept;
     esp_err_t set_mag_cal       (const float cal[3])  noexcept;
+    esp_err_t set_last_pos      (float lat, float lon) noexcept;
 
     /// Increment and persist boot counter. Call once at startup after init().
     uint32_t  increment_boot_count() noexcept;

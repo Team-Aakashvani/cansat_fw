@@ -1,0 +1,162 @@
+================================================================================
+AAKASHVANI CAN-7USAT 2026 — HARDWARE SENSOR CONNECTIONS & BUS PINOUT
+CONFIRMED & LOCKED WIRING SPECIFICATION
+================================================================================
+Timestamp: 2026-10-04 | Status: VERIFIED & LOCKED ON HARDWARE BENCH
+Host Microcontroller: ESP32-S3-DevKitC-1 (N16R8, 16MB Flash, 8MB Octal PSRAM)
+Serial Port: COM14 (115200 baud, 8-N-1)
+
+--------------------------------------------------------------------------------
+1. SHARED I2C SENSOR BUS ARCHITECTURE
+--------------------------------------------------------------------------------
+All four primary environmental and navigation sensors share a common 2-wire
+I2C bus with common 3.3V power and ground rails.
+
+Bus Configuration:
+  • Microcontroller Port: I2C_NUM_0
+  • SDA Pin:              GPIO 38 (Internal Pull-Up Enabled + Sensor Board Pull-Ups)
+  • SCL Pin:              GPIO 39 (Internal Pull-Up Enabled + Sensor Board Pull-Ups)
+  • Clock Frequency:      25 kHz (Slow, highly stable rate immune to cable capacitance
+                          and multi-drop fly-wire ringing)
+
+Common Power Rails:
+  • 3.3V (VCC / VIN):     Pin labeled "3V3" on ESP32-S3-DevKitC-1
+  • GND:                  Pin labeled "GND" on ESP32-S3-DevKitC-1
+
+--------------------------------------------------------------------------------
+2. EXACT SENSOR-BY-SENSOR WIRING TABLE
+--------------------------------------------------------------------------------
+
++------------------------------------------------------------------------------+
+| 1. BNO055 / BNO085 (9-DOF Absolute Orientation & Attitude IMU)               |
+|    I2C 7-Bit Address: 0x28 (Fallback/Primary Bosch BSX Fusion Mode)          |
+|    Read Rate: 100 Hz internal loop, 10 Hz USB telemetry                      |
++----------------------+--------------------+----------------------------------+
+| Sensor Breakout Pin  | ESP32-S3 Pin       | Notes                            |
++----------------------+--------------------+----------------------------------+
+| VIN / VCC            | 3.3V               | Regulated 3.3V rail              |
+| GND                  | GND                | Ground                           |
+| SDA                  | GPIO 38            | I2C Shared Data                  |
+| SCL                  | GPIO 39            | I2C Shared Clock                 |
+| RST                  | 3.3V (or NC/Reset) | Pulled high to keep active       |
+| INT, PS0, PS1, etc.  | NOT CONNECTED      | Removed as verified for stability|
++----------------------+--------------------+----------------------------------+
+
++------------------------------------------------------------------------------+
+| 2. BMP585 (Extreme-Precision Barometric Pressure & Altitude Sensor)          |
+|    I2C 7-Bit Address: 0x47 (Chip ID: 0x51)                                   |
+|    Read Rate: 50 Hz ODR, 8x Oversampling, IIR Filter Coefficient = 3         |
+|    Noise Performance: ±7.0 cm peak-to-peak, Auto-Ground Baseline at 0.00m    |
++----------------------+--------------------+----------------------------------+
+| Sensor Breakout Pin  | ESP32-S3 Pin       | Notes                            |
++----------------------+--------------------+----------------------------------+
+| VIN / VCC            | 3.3V               | Regulated 3.3V rail              |
+| GND                  | GND                | Ground                           |
+| SDA                  | GPIO 38            | I2C Shared Data                  |
+| SCL                  | GPIO 39            | I2C Shared Clock                 |
+| SDO / ADDR           | 3.3V               | Pulled HIGH to set address 0x47  |
+| CSB                  | 3.3V               | Pulled HIGH for I2C protocol     |
++----------------------+--------------------+----------------------------------+
+
++------------------------------------------------------------------------------+
+| 3. SHT40 / SHT41 (Precision Relative Humidity & Temperature Sensor)          |
+|    I2C 7-Bit Address: 0x44                                                   |
+|    Read Rate: 1 Hz high-repeatability mode (10 ms measurement strobe)        |
+|    Accuracy: ±0.2°C Temperature, ±1.8% Relative Humidity                     |
++----------------------+--------------------+----------------------------------+
+| Sensor Breakout Pin  | ESP32-S3 Pin       | Notes                            |
++----------------------+--------------------+----------------------------------+
+| VIN / VCC            | 3.3V               | Regulated 3.3V rail              |
+| GND                  | GND                | Ground                           |
+| SDA                  | GPIO 38            | I2C Shared Data                  |
+| SCL                  | GPIO 39            | I2C Shared Clock                 |
++----------------------+--------------------+----------------------------------+
+
++------------------------------------------------------------------------------+
+| 4. SGP41 (Dual-Hotplate Metal-Oxide VOC & NOx Air Quality Gas Sensor)        |
+|    I2C 7-Bit Address: 0x59                                                   |
+|    Self-Test Signature: 0xD400 (Hardware Self-Test PASS)                     |
+|    Read Rate: 1 Hz sample rate with live SHT4x RHT compensation bytes        |
+|    Calibration Scale: VOC Index 1-500 (100=Clean), NOx Index 1-500 (1=Clean) |
++----------------------+--------------------+----------------------------------+
+| Sensor Breakout Pin  | ESP32-S3 Pin       | Notes                            |
++----------------------+--------------------+----------------------------------+
+| VIN / VCC            | 3.3V               | Regulated 3.3V rail              |
+| GND                  | GND                | Ground                           |
+| SDA                  | GPIO 38            | I2C Shared Data                  |
+| SCL                  | GPIO 39            | I2C Shared Clock                 |
++----------------------+--------------------+----------------------------------+
+
+--------------------------------------------------------------------------------
+3. FULL SYSTEM PERIPHERAL PINOUT SUMMARY (ESP32-S3-DevKitC-1)
+--------------------------------------------------------------------------------
+
+Function                  ESP32-S3 GPIO     Direction / Protocol
+--------------------------------------------------------------------------------
+Shared I2C SDA            GPIO 38           Bidirectional (OD)
+Shared I2C SCL            GPIO 39           Output / Open Drain (OD)
+
+GNSS / GPS TX             GPIO 27           ESP32 TX -> GNSS RX (Auto-Baud 9600)
+GNSS / GPS RX             GPIO 13           ESP32 RX <- GNSS TX (NMEA stream)
+
+Telemetry XBee TX         GPIO 17           ESP32 TX -> XBee DIN (115200 baud)
+Telemetry XBee RX         GPIO 18           ESP32 RX <- XBee DOUT (115200 baud)
+
+SPI SCK (SD / CC1101)     GPIO 12           SPI Clock
+SPI MISO                  GPIO 13           SPI Master In Slave Out
+SPI MOSI                  GPIO 11           SPI Master Out Slave In
+SD Card CS                GPIO 9            Chip Select (Active LOW)
+CC1101 Radio CS           GPIO 10           Chip Select (Active LOW)
+
+Motor 1 (Front-Left)      GPIO 4            PWM / ESC (1000-2000 µs)
+Motor 2 (Front-Right)     GPIO 5            PWM / ESC (1000-2000 µs)
+Motor 3 (Rear-Right)      GPIO 6            PWM / ESC (1000-2000 µs)
+Motor 4 (Rear-Left)       GPIO 7            PWM / ESC (1000-2000 µs)
+Parachute Release Servo   GPIO 15           Servo PWM (1000µs Lock / 2000µs Deploy)
+
+Battery Voltage / Current GPIO 1            ADC / INA260 Monitor
+
+--------------------------------------------------------------------------------
+4. CALIBRATION & TRANSFER FUNCTIONS IN FIRMWARE
+--------------------------------------------------------------------------------
+
+A. IMU Attitude:
+   • Internal BSX fusion chip calculates absolute quaternion / Euler angles.
+   • Firmware uses hardware tare calibration with zero angular drift at rest.
+
+B. BMP585 Barometric Altitude:
+   • Hypsometric barometric equation:
+     h = 44330.0 * (1.0 - (P / P0)^(1.0 / 5.255))
+   • P0 automatically baseline-calibrated on boot across 20 samples to 0.00 m AGL.
+
+C. SHT4x Temperature & Humidity:
+   • T [°C]  = -45.0 + 175.0 * (S_T / 65535.0)
+   • RH [%]  = -6.0 + 125.0 * (S_RH / 65535.0)
+   • Full Sensirion CRC-8 polynomial (0x31, init 0xFF) error checking.
+
+D. SGP41 Gas Index Models:
+   • VOC Index = 100.0 * (S_raw / S_base)^(-2.5), clamped to [1, 500].
+     - Clean ambient baseline = 100 (Green).
+     - Aerosols / room fresheners / solvents spike > 100 (Yellow / Orange / Red).
+   • NOx Index = 1.0 + 499.0 * (1.0 - exp(-5.0 * (S_raw / S_base - 1.0))), clamped [1, 500].
+     - Clean ambient baseline = 1 (Green).
+
+--------------------------------------------------------------------------------
+5. LIVE TELEMETRY PACKET STRUCTURES
+--------------------------------------------------------------------------------
+
+1. High-Rate Flight Telemetry (10 Hz USB Console / 1 Hz Radio & SD):
+   Format:
+   TEAM_ID,MISSION_TIME,PKT_COUNT,ALT,PRES,TEMP,VOLT,GNSS_TIME,LAT,LON,GNSS_ALT,SATS,PITCH,ROLL,YAW,STATE,FREQ,RSSI
+   Example:
+   1234,00:00:15,152,0.01,100983.2,32.3,7.40,00:00:00,0.000000,0.000000,0.00,0,17.00,-6.00,359.94,2,433.0,-128
+
+2. Environmental Telemetry (1 Hz Clean Engineering Packet):
+   Format:
+   1234,ENV,TEMPERATURE_C,HUMIDITY_PCT,VOC_INDEX,NOX_INDEX
+   Example:
+   1234,ENV,32.47,52.4,100,1
+
+================================================================================
+END OF FILE — SYSTEM BENCH POSITION LOCKED
+================================================================================

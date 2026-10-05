@@ -25,9 +25,8 @@
 namespace nav {
 
 // ---------------------------------------------------------------------------
-// Maximum measurement dimension supported (6 for GPS position+velocity)
+// Maximum measurement dimension supported (defined in config.hpp)
 // ---------------------------------------------------------------------------
-constexpr int MAX_MEAS_DIM = 6;
 
 // ---------------------------------------------------------------------------
 // UpdateResult — diagnostics from one measurement update
@@ -57,6 +56,9 @@ class ErrorStateEKF {
 public:
     NavState         nav;
     Mat<N_ERR,N_ERR> P;
+    Mat<N_ERR,N_ERR> Phi_{};
+    Mat<N_ERR,N_ERR> Qd_{};
+    Mat<N_ERR,N_ERR> PhiP_{};
 
     // ---- Construction / reset ------------------------------------------
 
@@ -91,14 +93,15 @@ public:
                  double sigma_ba, double sigma_bg) noexcept {
         if (dt <= 0.0) return;
 
-        const Mat<N_ERR,N_ERR> Phi = StrapdownINS::error_state_transition(nav, f_b, omega_b, dt);
-        const Mat<N_ERR,N_ERR> Qd  = StrapdownINS::process_noise_cov(nav, sigma_a, sigma_w,
-                                                                       sigma_ba, sigma_bg, dt);
+        StrapdownINS::error_state_transition(nav, f_b, omega_b, dt, Phi_);
+        StrapdownINS::process_noise_cov(nav, sigma_a, sigma_w,
+                                         sigma_ba, sigma_bg, dt, Qd_);
         // Mechanise
         StrapdownINS::propagate(nav, f_b, omega_b, dt);
 
         // P⁺ = Φ·P·Φᵀ + Q
-        P = Phi * P * Phi.T() + Qd;
+        PhiP_ = Phi_ * P;
+        P = PhiP_ * Phi_.T() + Qd_;
         sanitise_covariance();
     }
 
@@ -114,7 +117,8 @@ public:
             void (*H_fn)(const NavState&, double H_mat[M][N_ERR]),
             const double R_arr[M][M],
             double health = 1.0,
-            double gate_chi2 = -1.0) noexcept {
+            double gate_chi2 = -1.0,
+            bool   commit = true) noexcept {
 
         UpdateResult<M> res{};
         res.t_s = t_s;
@@ -189,6 +193,11 @@ public:
 
         // Chi² gate (if enabled)
         if (gate_chi2 > 0.0 && mah_sq > gate_chi2) {
+            res.accepted = false;
+            return res;
+        }
+        // Probe mode: statistics only, state and covariance untouched
+        if (!commit) {
             res.accepted = false;
             return res;
         }

@@ -36,6 +36,8 @@ using SimpHandler   = std::function<void(float pressure_pa)>;
 using SimgHandler   = std::function<void(double east, double north, double up, double ve, double vn, double vu)>;
 using SimiHandler   = std::function<void(double ax, double ay, double az, double gx, double gy, double gz)>;
 using GenericHandler= std::function<void()>;
+using MotorHandler  = std::function<void(int motor_id, float pct)>;
+using PidTestHandler= std::function<void(bool start, float base_throttle)>;
 using OtaHandler    = std::function<void(const char* cmd)>;
 
 class CommandParser {
@@ -54,8 +56,11 @@ public:
     void on_abort  (GenericHandler h) noexcept { abort_handler_  = h; }
     void on_chute  (GenericHandler h) noexcept { chute_handler_  = h; }
     void on_rtl    (GenericHandler h) noexcept { rtl_handler_    = h; }
+    void on_motor  (MotorHandler  h) noexcept { motor_handler_  = h; }
+    void on_pid    (PidTestHandler h) noexcept { pid_handler_    = h; }
     void on_mapping(GenericHandler h) noexcept { mapping_handler_ = h; }
     void on_ota    (OtaHandler     h) noexcept { ota_handler_     = h; }
+    void on_tare   (GenericHandler h) noexcept { tare_handler_    = h; }
 
     /**
      * @brief Build the RxCallback to pass to XBeeLink::set_rx_callback().
@@ -79,8 +84,11 @@ private:
     GenericHandler abort_handler_{};
     GenericHandler chute_handler_{};
     GenericHandler rtl_handler_{};
+    MotorHandler   motor_handler_{};
+    PidTestHandler pid_handler_{};
     GenericHandler mapping_handler_{};
     OtaHandler     ota_handler_{};
+    GenericHandler tare_handler_{};
 
     /// Parse "HH:MM:SS" → seconds. Returns 0 on parse error.
     static uint32_t parse_time_str(const char* s) noexcept;

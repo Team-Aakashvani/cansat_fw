@@ -38,6 +38,8 @@ public:
 
     void flush_rx() noexcept;
 
+    esp_err_t set_baud(int baud) noexcept;
+
     bool is_initialised() const noexcept { return initialised_; }
 
 private:

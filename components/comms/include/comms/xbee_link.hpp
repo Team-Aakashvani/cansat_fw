@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "hal/uart_bus.hpp"
+#include "app_hal/uart_bus.hpp"
 #include "comms/comms_types.hpp"
 #include "nav/config.hpp"
 #include "freertos/FreeRTOS.h"

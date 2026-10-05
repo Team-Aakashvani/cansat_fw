@@ -97,7 +97,33 @@ struct StrapdownINS {
             w_b(i) = omega_b(i) - state.bg(i);
         }
 
-        // 2. Attitude: q⁺ = q ⊗ Exp_q(ω_b · dt)  (closed-form, exact for const ω)
+        // 2. Closed-loop gravity vector observer on SO(3) to eliminate stationary gyro drift
+        const double a_mag = std::sqrt(a_b(0)*a_b(0) + a_b(1)*a_b(1) + a_b(2)*a_b(2));
+        if (a_mag > 7.0 && a_mag < 13.0) {
+            const Mat<3,3> R_cur = R_from_quat(state.q);
+            const double inv_amag = 1.0 / a_mag;
+            const double ax_n = a_b(0) * inv_amag;
+            const double ay_n = a_b(1) * inv_amag;
+            const double az_n = a_b(2) * inv_amag;
+
+            // Expected specific force direction in body frame: R_wb^T * [0, 0, 1]^T = [R(2,0), R(2,1), R(2,2)]
+            const double vx_p = R_cur(2, 0);
+            const double vy_p = R_cur(2, 1);
+            const double vz_p = R_cur(2, 2);
+
+            // Error: e = a_measured x v_predicted
+            const double ex = ay_n * vz_p - az_n * vy_p;
+            const double ey = az_n * vx_p - ax_n * vz_p;
+            const double ez = ax_n * vy_p - ay_n * vx_p;
+
+            // Proportional correction gain (Kp = 0.5)
+            constexpr double kKp = 0.5;
+            w_b(0) += kKp * ex;
+            w_b(1) += kKp * ey;
+            w_b(2) += kKp * ez;
+        }
+
+        // 3. Attitude: q⁺ = q ⊗ Exp_q(ω_b · dt)  (closed-form, exact for const ω)
         const Quat q_new = quat_integrate_gyro(state.q, w_b, dt);
 
         // 3. Velocity: midpoint rotation (average old+new DCM)
@@ -137,11 +163,12 @@ struct StrapdownINS {
     //   δḃ_a = 0 (RW)                           (zero row)
     //   δḃ_g = 0 (RW)                           (zero row)
     // -----------------------------------------------------------------------
-    static Mat<N_ERR,N_ERR> error_state_transition(
+    static void error_state_transition(
             const NavState& state,
             const Vec<3>& f_b,
             const Vec<3>& omega_b,
-            double dt) noexcept {
+            double dt,
+            Mat<N_ERR,N_ERR>& Phi) noexcept {
 
         const Mat<3,3> R_wb = R_from_quat(state.q);
         Vec<3> a_b_deb, w_b_deb;
@@ -150,62 +177,47 @@ struct StrapdownINS {
             w_b_deb(i) = omega_b(i) - state.bg(i);
         }
 
-        Mat<N_ERR,N_ERR> F = Mat<N_ERR,N_ERR>::zero();
-        const Mat<3,3> I3 = Mat<3,3>::eye();
+        Phi = Mat<N_ERR,N_ERR>::eye();
 
         // δp ̇ = δv  → F[0:3, 3:6] = I₃
-        for (int i = 0; i < 3; ++i) F(EIDX_P_0+i, EIDX_V_0+i) = 1.0;
+        for (int i = 0; i < 3; ++i) Phi(EIDX_P_0+i, EIDX_V_0+i) = dt;
 
         // δv ̇ = −R·[a]× · δθ  → F[3:6, 6:9] = −R·skew(a_b)
         {
             const Mat<3,3> Sa = skew3(a_b_deb);
-            const Mat<3,3> block = (R_wb * Sa) * (-1.0);
+            const Mat<3,3> block = (R_wb * Sa) * (-dt);
             for (int i = 0; i < 3; ++i)
                 for (int j = 0; j < 3; ++j)
-                    F(EIDX_V_0+i, EIDX_TH_0+j) = block(i,j);
+                    Phi(EIDX_V_0+i, EIDX_TH_0+j) = block(i,j);
         }
         // δv ̇ += −R · δb_a  → F[3:6, 9:12] = −R
         for (int i = 0; i < 3; ++i)
             for (int j = 0; j < 3; ++j)
-                F(EIDX_V_0+i, EIDX_BA_0+j) = -R_wb(i,j);
+                Phi(EIDX_V_0+i, EIDX_BA_0+j) = -R_wb(i,j) * dt;
 
         // δθ̇ = −[ω]× · δθ  → F[6:9, 6:9] = −skew(ω_b)
         {
             const Mat<3,3> Sw = skew3(w_b_deb);
             for (int i = 0; i < 3; ++i)
                 for (int j = 0; j < 3; ++j)
-                    F(EIDX_TH_0+i, EIDX_TH_0+j) = -Sw(i,j);
+                    Phi(EIDX_TH_0+i, EIDX_TH_0+j) += -Sw(i,j) * dt;
         }
         // δθ̇ += −δb_g  → F[6:9, 12:15] = −I₃
         for (int i = 0; i < 3; ++i)
-            F(EIDX_TH_0+i, EIDX_BG_0+i) = -1.0;
-
-        // Φ ≈ I + F·dt + ½F²·dt²
-        const Mat<N_ERR,N_ERR> FI = Mat<N_ERR,N_ERR>::eye();
-        const Mat<N_ERR,N_ERR> Fdt = F * dt;
-        const Mat<N_ERR,N_ERR> F2dt2 = (F * F) * (0.5 * dt * dt);
-        return FI + Fdt + F2dt2;
+            Phi(EIDX_TH_0+i, EIDX_BG_0+i) = -dt;
     }
 
     // -----------------------------------------------------------------------
     // Discrete process-noise covariance Q_d (15×15).
-    //
-    // Driven by four continuous-time spectral densities:
-    //   σ_a     VRW  (accel white noise,       m/s²/√Hz)
-    //   σ_w     ARW  (gyro white noise,         rad/s/√Hz)
-    //   σ_ba    BIVS (accel bias instability,    m/s³/√Hz)
-    //   σ_bg    BIVS (gyro  bias instability,    rad/s²/√Hz)
-    //
-    // Q_d is full-rank — NOT rank-1 — which is essential for long-run
-    // covariance stability. (Farrell §7.6 Van-Loan approximation.)
     // -----------------------------------------------------------------------
-    static Mat<N_ERR,N_ERR> process_noise_cov(
+    static void process_noise_cov(
             const NavState& state,
             double sigma_a,
             double sigma_w,
             double sigma_ba,
             double sigma_bg,
-            double dt) noexcept {
+            double dt,
+            Mat<N_ERR,N_ERR>& Qd) noexcept {
 
         const Mat<3,3> R_wb = R_from_quat(state.q);
         const Mat<3,3> RR = R_wb * R_wb.T();  // = I if R is orthogonal; numerical safety
@@ -215,7 +227,7 @@ struct StrapdownINS {
         const double q_ba = sigma_ba * sigma_ba * dt;
         const double q_bg = sigma_bg * sigma_bg * dt;
 
-        Mat<N_ERR,N_ERR> Qd = Mat<N_ERR,N_ERR>::zero();
+        Qd = Mat<N_ERR,N_ERR>::zero();
 
         // Velocity noise: world-frame accel noise → δv
         for (int i = 0; i < 3; ++i)
@@ -242,7 +254,6 @@ struct StrapdownINS {
         }
 
         Qd.symmetrise();
-        return Qd;
     }
 };
 

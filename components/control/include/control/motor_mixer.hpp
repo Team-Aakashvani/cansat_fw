@@ -29,10 +29,14 @@ namespace control {
 class MotorMixer {
 public:
     static constexpr int N_MOTORS = 4;
-    static constexpr uint32_t LEDC_FREQ_HZ  = 50;
-    static constexpr uint32_t LEDC_RES_BITS = 16;
-    static constexpr uint32_t LEDC_MAX_DUTY = (1 << LEDC_RES_BITS) - 1;
-    static constexpr uint32_t SERVO_CH      = 4;  // LEDC channel for servo
+    static constexpr uint32_t MOTOR_PWM_FREQ_HZ = 5000; // 5kHz smooth DC PWM
+    static constexpr uint32_t MOTOR_RES_BITS    = 10;   // 10-bit (0..1023)
+    static constexpr uint32_t MOTOR_MAX_DUTY    = (1 << MOTOR_RES_BITS) - 1;
+
+    static constexpr uint32_t SERVO_FREQ_HZ     = 50;   // 50Hz RC servo standard
+    static constexpr uint32_t SERVO_RES_BITS    = 16;   // 16-bit
+    static constexpr uint32_t SERVO_MAX_DUTY    = (1 << SERVO_RES_BITS) - 1;
+    static constexpr uint32_t SERVO_CH          = 4;    // LEDC channel for servo
 
     MotorMixer() noexcept = default;
 

@@ -14,7 +14,7 @@
 #include "esp_log.h"
 #include "driver/uart.h"
 
-#include "hal/uart_bus.hpp"
+#include "app_hal/uart_bus.hpp"
 #include "comms/xbee_link.hpp"
 
 

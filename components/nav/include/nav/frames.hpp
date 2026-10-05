@@ -40,11 +40,11 @@ inline Vec<3> gravity_world() noexcept {
 // Quaternion algebra
 // ===========================================================================
 
-/// Normalise a quaternion; returns identity if near-zero.
+/// Normalise a quaternion; returns identity if near-zero or non-finite.
 inline Quat quat_normalize(const Quat& q) noexcept {
-    constexpr double EPS = 1.0e-12;
+    constexpr double kEps = 1.0e-12;
     double n = std::sqrt(q(0)*q(0) + q(1)*q(1) + q(2)*q(2) + q(3)*q(3));
-    if (n < EPS) {
+    if (!std::isfinite(n) || n < kEps) {
         Quat id;
         id(0) = 1.0; id(1) = 0.0; id(2) = 0.0; id(3) = 0.0;
         return id;
@@ -135,7 +135,7 @@ inline Vec<3> rotvec_from_quat(const Quat& q) noexcept {
     }
     const double nv = std::sqrt(qn(1)*qn(1) + qn(2)*qn(2) + qn(3)*qn(3));
     Vec<3> rv;
-    if (nv < 1.0e-8) {
+    if (!std::isfinite(nv) || nv < 1.0e-8) {
         rv(0) = 2.0*qn(1);
         rv(1) = 2.0*qn(2);
         rv(2) = 2.0*qn(3);
@@ -183,9 +183,16 @@ struct EulerAngles {
 inline EulerAngles euler_from_quat(const Quat& q) noexcept {
     const Mat<3,3> R = R_from_quat(q);
     EulerAngles e;
-    e.pitch_rad = std::asin(-R(2,0));
-    e.roll_rad  = std::atan2(R(2,1), R(2,2));
-    e.yaw_rad   = std::atan2(R(1,0), R(0,0));
+    const double sin_pitch = std::clamp(-R(2,0), -1.0, 1.0);
+    e.pitch_rad = std::asin(sin_pitch);
+    if (std::abs(sin_pitch) > 0.9999) {
+        // Gimbal lock at pitch = +-90 deg: decouple roll and yaw cleanly
+        e.roll_rad = 0.0;
+        e.yaw_rad  = std::atan2(-R(0,1), R(1,1));
+    } else {
+        e.roll_rad = std::atan2(R(2,1), R(2,2));
+        e.yaw_rad  = std::atan2(R(1,0), R(0,0));
+    }
     return e;
 }
 

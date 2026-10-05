@@ -17,8 +17,9 @@
  */
 #pragma once
 
-#include "hal/i2c_bus.hpp"
+#include "app_hal/i2c_bus.hpp"
 #include "nav/config.hpp"
+#include "drivers/imu_attitude.hpp"
 #include <cstdint>
 
 namespace drivers {
@@ -27,9 +28,19 @@ struct IMUData {
     double acc_x, acc_y, acc_z;   ///< m/s² (specific force, body frame)
     double gyr_x, gyr_y, gyr_z;   ///< rad/s
     double mag_x, mag_y, mag_z;   ///< µT
+    double euler_pitch_deg = 0.0; ///< Fused orientation Pitch (deg)
+    double euler_roll_deg  = 0.0; ///< Fused orientation Roll (deg)
+    double euler_yaw_deg   = 0.0; ///< Fused orientation Yaw/Heading (deg)
+    double quat_w = 1.0;          ///< Relative vehicle quaternion
+    double quat_x = 0.0;
+    double quat_y = 0.0;
+    double quat_z = 0.0;
+    MountClass mount = MountClass::UNKNOWN; ///< Auto-identified mount orientation
     double timestamp_s;
     bool   valid;
     bool   mag_valid;
+    bool   euler_valid;
+    bool   quat_valid;
     bool   saturated;
 };
 
@@ -48,15 +59,28 @@ public:
     /// Poll for new data (non-blocking). Returns valid IMUData if new sample ready.
     IMUData read() noexcept;
 
-    /// Trigger soft reset.
     void reset() noexcept;
+    void calibrate_gyro_bias(int samples = 80) noexcept;
 
     bool is_ready() const noexcept { return ready_; }
+    void request_attitude_tare() noexcept { attitude_ref_.request_tare(); }
+    MountClass current_mount() const noexcept { return attitude_ref_.mount(); }
+    AttitudeReference& attitude_ref() noexcept { return attitude_ref_; }
+
+    enum class IMUType : uint8_t { UNKNOWN, BNO085, BNO055, MPU6050 };
 
 private:
-    hal::I2CBus* bus_   = nullptr;
-    uint8_t      addr_  = I2C_ADDR_LOW;
-    bool         ready_ = false;
+    IMUData read_mpu6050() noexcept;
+    IMUData read_bno055() noexcept;
+    hal::I2CBus* bus_       = nullptr;
+    uint8_t      addr_      = I2C_ADDR_LOW;
+    bool         ready_     = false;
+    IMUType      imu_type_  = IMUType::UNKNOWN;
+    double       gyro_bias_x_ = 0.0;
+    double       gyro_bias_y_ = 0.0;
+    double       gyro_bias_z_ = 0.0;
+    uint64_t     last_read_us_ = 0;
+    AttitudeReference attitude_ref_{};
 
     // SHTP/SH2 packet handling
     esp_err_t shtp_write(uint8_t channel, const uint8_t* payload, size_t len) noexcept;

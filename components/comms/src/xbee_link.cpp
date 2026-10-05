@@ -122,43 +122,72 @@ bool XBeeLink::spin() noexcept {
 bool XBeeLink::parse_uplink(const uint8_t* buf, size_t len,
                              UplinkCommand& out) const noexcept {
     char tmp[RX_BUF_LEN];
+    if (len >= sizeof(tmp)) len = sizeof(tmp) - 1;
     memcpy(tmp, buf, len);
     tmp[len] = '\0';
 
-    char* last_comma = strrchr(tmp, ',');
-    if (!last_comma) return false;
+    // Strip leading/trailing whitespace, \r, \n
+    char* p = tmp;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    char* end = p + strlen(p) - 1;
+    while (end >= p && (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n')) {
+        *end = '\0';
+        end--;
+    }
+    if (*p == '\0') return false;
 
-    uint16_t received_crc = (uint16_t)strtol(last_comma + 1, nullptr, 16);
-    *last_comma = '\0';
-    uint16_t actual_crc = crc16_ccitt(reinterpret_cast<const uint8_t*>(tmp), strlen(tmp));
+    // Optional CRC verification if 4-hex-digit CRC is present after last comma
+    char* last_comma = strrchr(p, ',');
+    if (last_comma && strlen(last_comma + 1) == 4) {
+        char* endptr = nullptr;
+        uint16_t received_crc = (uint16_t)strtol(last_comma + 1, &endptr, 16);
+        if (endptr && *endptr == '\0') {
+            char crc_check_str[RX_BUF_LEN];
+            size_t base_len = (size_t)(last_comma - p);
+            memcpy(crc_check_str, p, base_len);
+            crc_check_str[base_len] = '\0';
+            uint16_t actual_crc = crc16_ccitt(reinterpret_cast<const uint8_t*>(crc_check_str), base_len);
+            if (received_crc == actual_crc) {
+                *last_comma = '\0'; // strip validated CRC
+            }
+        }
+    }
 
-    if (received_crc != actual_crc) return false;
+    // Skip optional "CMD," prefix
+    if (strncmp(p, "CMD,", 4) == 0 || strncmp(p, "cmd,", 4) == 0) {
+        p += 4;
+    }
 
     char* saveptr = nullptr;
-    char* tok = strtok_r(tmp, ",", &saveptr);
-    if (!tok) return false;
-    unsigned team_id = (unsigned)atoi(tok);
-    if (team_id != (unsigned)nav::TELEM_CFG.team_id) return false;
-
-    tok = strtok_r(nullptr, ",", &saveptr);
+    char* tok = strtok_r(p, ", ", &saveptr);
     if (!tok) return false;
 
-    if      (strcmp(tok, "CX")    == 0) out.type = CommandType::CX;
-    else if (strcmp(tok, "ST")    == 0) out.type = CommandType::ST;
-    else if (strcmp(tok, "SIM")   == 0) out.type = CommandType::SIM;
-    else if (strcmp(tok, "SIMP")  == 0) out.type = CommandType::SIMP;
-    else if (strcmp(tok, "SIMG")  == 0) out.type = CommandType::SIMG;
-    else if (strcmp(tok, "SIMI")  == 0) out.type = CommandType::SIMI;
-    else if (strcmp(tok, "CAL")   == 0) out.type = CommandType::CAL;
-    else if (strcmp(tok, "ABORT") == 0) out.type = CommandType::ABORT;
-    else if (strcmp(tok, "CHUTE") == 0) out.type = CommandType::CHUTE;
-    else if (strcmp(tok, "RTL")   == 0) out.type = CommandType::RTL;
-    else if (strcmp(tok, "MAP")   == 0) out.type = CommandType::MAP;
-    else if (strcmp(tok, "OTA")   == 0) out.type = CommandType::OTA;
+    // Optional team_id check
+    unsigned team_id = 0;
+    if (sscanf(tok, "%u", &team_id) == 1 && (team_id == (unsigned)nav::TELEM_CFG.team_id || team_id == 0 || team_id == 1234)) {
+        tok = strtok_r(nullptr, ", ", &saveptr);
+        if (!tok) return false;
+    }
+
+    if      (strcasecmp(tok, "CX")    == 0) out.type = CommandType::CX;
+    else if (strcasecmp(tok, "ST")    == 0) out.type = CommandType::ST;
+    else if (strcasecmp(tok, "SIM")   == 0) out.type = CommandType::SIM;
+    else if (strcasecmp(tok, "SIMP")  == 0) out.type = CommandType::SIMP;
+    else if (strcasecmp(tok, "SIMG")  == 0) out.type = CommandType::SIMG;
+    else if (strcasecmp(tok, "SIMI")  == 0) out.type = CommandType::SIMI;
+    else if (strcasecmp(tok, "CAL")   == 0) out.type = CommandType::CAL;
+    else if (strcasecmp(tok, "ABORT") == 0) out.type = CommandType::ABORT;
+    else if (strcasecmp(tok, "CHUTE") == 0) out.type = CommandType::CHUTE;
+    else if (strcasecmp(tok, "RTL")   == 0) out.type = CommandType::RTL;
+    else if (strcasecmp(tok, "MAP")   == 0) out.type = CommandType::MAP;
+    else if (strcasecmp(tok, "OTA")   == 0) out.type = CommandType::OTA;
+    else if (strcasecmp(tok, "TARE")  == 0) out.type = CommandType::TARE;
     else return false;
 
-    tok = strtok_r(nullptr, ",", &saveptr);
+    tok = strtok_r(nullptr, "\r\n", &saveptr);
     if (tok) {
+        // Strip leading comma or space if present
+        while (*tok == ',' || *tok == ' ') tok++;
         strncpy(out.arg, tok, sizeof(out.arg) - 1);
         out.arg[sizeof(out.arg) - 1] = '\0';
     } else {

@@ -34,6 +34,12 @@ public:
     esp_err_t init(i2c_port_t port, int sda_pin, int scl_pin,
                    uint32_t speed_hz = 400000) noexcept;
 
+    /// Write `len` bytes directly to device at `addr` without a subaddress byte.
+    esp_err_t write_raw(uint8_t addr, const uint8_t* data, size_t len) noexcept;
+
+    /// Read `len` bytes directly from device at `addr` without sending a subaddress byte.
+    esp_err_t read_raw(uint8_t addr, uint8_t* buf, size_t len) noexcept;
+
     /// Write `len` bytes to device at `addr` starting at register `reg`.
     esp_err_t write_reg(uint8_t addr, uint8_t reg,
                         const uint8_t* data, size_t len) noexcept;
@@ -58,8 +64,12 @@ public:
     bool is_initialised() const noexcept { return bus_ != nullptr; }
 
 private:
+    i2c_master_dev_handle_t get_device(uint8_t addr) noexcept;
+
     i2c_master_bus_handle_t bus_  = nullptr;
     SemaphoreHandle_t       mutex_= nullptr;
+    i2c_master_dev_handle_t dev_cache_[128] = {};
+    uint32_t                speed_hz_ = 100000;
 };
 
 } // namespace hal

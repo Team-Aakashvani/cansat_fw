@@ -12,7 +12,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "driver/uart.h"
-#include "hal/spi_bus.hpp"
+#include "app_hal/spi_bus.hpp"
 #include "comms/xbee_link.hpp"
 
 // PIN DEFINITIONS — ESP32-S3 WROOM-1

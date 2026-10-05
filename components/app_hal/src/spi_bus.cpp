@@ -2,7 +2,7 @@
  * @file spi_bus.cpp
  * @brief SPI bus implementation.
  */
-#include "hal/spi_bus.hpp"
+#include "app_hal/spi_bus.hpp"
 #include "esp_log.h"
 #include <cstring>
 

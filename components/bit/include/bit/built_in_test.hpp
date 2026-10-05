@@ -22,9 +22,9 @@
  */
 #pragma once
 
-#include "hal/i2c_bus.hpp"
-#include "hal/spi_bus.hpp"
-#include "hal/uart_bus.hpp"
+#include "app_hal/i2c_bus.hpp"
+#include "app_hal/spi_bus.hpp"
+#include "app_hal/uart_bus.hpp"
 #include "drivers/bno085.hpp"
 #include "drivers/bmp585.hpp"
 #include "drivers/ngps01.hpp"

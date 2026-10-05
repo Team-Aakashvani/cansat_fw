@@ -14,7 +14,7 @@
  */
 #pragma once
 
-#include "hal/spi_bus.hpp"
+#include "app_hal/spi_bus.hpp"
 #include "driver/spi_master.h"
 #include <cstdint>
 
@@ -35,15 +35,19 @@ public:
     /// Read current RSSI in dBm (valid only after set_frequency + ~2ms settle).
     int8_t read_rssi_dbm() noexcept;
 
+    /// Get current tuned frequency in Hz.
+    uint32_t get_frequency() const noexcept { return freq_hz_; }
+
     /// Get the raw SPI device handle (needed for acquire/release bus calls).
     spi_device_handle_t device_handle() const noexcept { return dev_; }
 
     bool is_ready() const noexcept { return ready_; }
 
 private:
-    hal::SPIBus*        spi_   = nullptr;
-    spi_device_handle_t dev_   = nullptr;
-    bool                ready_ = false;
+    hal::SPIBus*        spi_      = nullptr;
+    spi_device_handle_t dev_      = nullptr;
+    bool                ready_    = false;
+    uint32_t            freq_hz_  = 433000000;
 
     // CC1101 register addresses
     static constexpr uint8_t REG_FREQ2       = 0x0D;

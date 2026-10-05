@@ -19,24 +19,22 @@ namespace logging {
 // init
 // ---------------------------------------------------------------------------
 esp_err_t SDLogger::init(int clk_pin, int cmd_pin, int d0_pin) noexcept {
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;  // 40MHz
+    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+    host.slot = SPI2_HOST;
+    host.max_freq_khz = 10000;
 
-    sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
-    slot.clk  = (gpio_num_t)clk_pin;
-    slot.cmd  = (gpio_num_t)cmd_pin;
-    slot.d0   = (gpio_num_t)d0_pin;
-    slot.width = 1;                              // 1-bit SDIO (safe for all cards)
-    slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+    sdspi_device_config_t slot = SDSPI_DEVICE_CONFIG_DEFAULT();
+    slot.gpio_cs = (gpio_num_t)cmd_pin;
+    slot.host_id = SPI2_HOST;
 
     esp_vfs_fat_sdmmc_mount_config_t mnt{};
     mnt.format_if_mount_failed = false;
     mnt.max_files              = 4;
     mnt.allocation_unit_size   = 16 * 1024;
 
-    esp_err_t ret = esp_vfs_fat_sdmmc_mount(MOUNT, &host, &slot, &mnt, &card_);
+    esp_err_t ret = esp_vfs_fat_sdspi_mount(MOUNT, &host, &slot, &mnt, &card_);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SD mount failed (%d): %s", ret, esp_err_to_name(ret));
+        ESP_LOGW(TAG, "SD card absent or unmounted (%s) — continuing with NVS logging", esp_err_to_name(ret));
         return ret;
     }
     sdmmc_card_print_info(stdout, card_);

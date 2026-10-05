@@ -6,7 +6,7 @@
  * Configuration: Continuous measurement, mass flow, averaging off.
  */
 #pragma once
-#include "hal/i2c_bus.hpp"
+#include "app_hal/i2c_bus.hpp"
 #include <cstdint>
 namespace drivers {
 struct DiffPressData {

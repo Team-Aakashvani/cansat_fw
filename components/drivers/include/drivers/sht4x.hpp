@@ -6,7 +6,7 @@
  * Used for cabin environment monitoring (competition optional field).
  */
 #pragma once
-#include "hal/i2c_bus.hpp"
+#include "app_hal/i2c_bus.hpp"
 #include <cstdint>
 namespace drivers {
 struct HumidData {

@@ -46,7 +46,7 @@ struct EventRecord {
     uint32_t  mission_time_s;
     EventCode code;
     uint8_t   data[3];        ///< Event-specific payload (e.g. state code)
-    char      msg[54];        ///< Null-terminated human-readable note
+    char      msg[52];        ///< Null-terminated human-readable note
 } __attribute__((packed));
 
 static_assert(sizeof(EventRecord) == 64, "EventRecord must be 64 bytes");

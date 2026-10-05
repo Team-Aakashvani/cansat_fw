@@ -30,16 +30,23 @@ esp_err_t CC1101::init(hal::SPIBus& spi, int cs_pin) noexcept
         return ret;
     }
 
-    // Quick sanity check: read a register and see if we get a plausible value
-    // (In production you'd read the VERSION register, but for now just mark ready)
+    // Check version register (0x31) to verify physical chip presence
+    uint8_t ver = read_status_reg(0x31);
+    if (ver == 0x00 || ver == 0xFF) {
+        ESP_LOGW(TAG, "CC1101 not detected on CS pin %d (ver=0x%02X, ABSENT)", cs_pin, ver);
+        ready_ = false;
+        return ESP_ERR_NOT_FOUND;
+    }
+
     ready_ = true;
-    ESP_LOGI(TAG, "CC1101 initialised on CS pin %d", cs_pin);
+    ESP_LOGI(TAG, "CC1101 initialised on CS pin %d (version=0x%02X)", cs_pin, ver);
     return ESP_OK;
 }
 
 void CC1101::set_frequency(uint32_t freq_hz) noexcept
 {
     if (!ready_) return;
+    freq_hz_ = freq_hz;
 
     // CC1101 frequency register formula:
     //   FREQ = (desired_freq_hz * 2^16) / 26_000_000

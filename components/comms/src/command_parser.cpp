@@ -83,9 +83,46 @@ void CommandParser::dispatch(const UplinkCommand& cmd) noexcept {
         if (mapping_handler_) mapping_handler_();
         break;
     }
+    case CommandType::MTR: {
+        int m_id = -1;
+        float pct = 0.0f;
+        char id_str[16] = {};
+        if (sscanf(cmd.arg, "%15[^,],%f", id_str, &pct) == 2 || sscanf(cmd.arg, "%15s %f", id_str, &pct) == 2) {
+            if (strcasecmp(id_str, "ALL") == 0) m_id = -1;
+            else m_id = atoi(id_str);
+        } else {
+            pct = (float)atof(cmd.arg);
+            m_id = -1;
+        }
+        ESP_LOGI(TAG, "MTR → Motor %s at %.1f%%", (m_id == -1 ? "ALL" : id_str), (double)pct);
+        if (motor_handler_) motor_handler_(m_id, pct);
+        break;
+    }
+    case CommandType::PID: {
+        bool start = (strcasecmp(cmd.arg, "START") == 0 || strcasecmp(cmd.arg, "ON") == 0 ||
+                      strcasecmp(cmd.arg, "ENABLE") == 0 || strncmp(cmd.arg, "START", 5) == 0);
+        float base_thr = 0.25f; // default 25% baseline throttle
+        if (start) {
+            char* comma = strchr(cmd.arg, ',');
+            if (comma) base_thr = (float)atof(comma + 1) / 100.0f;
+            else {
+                char* space = strchr(cmd.arg, ' ');
+                if (space) base_thr = (float)atof(space + 1) / 100.0f;
+            }
+            if (base_thr <= 0.05f) base_thr = 0.25f;
+        }
+        ESP_LOGI(TAG, "PID → %s (Base Throttle: %.1f%%)", start ? "START" : "STOP", (double)(base_thr * 100.0f));
+        if (pid_handler_) pid_handler_(start, base_thr);
+        break;
+    }
     case CommandType::OTA: {
         ESP_LOGI(TAG, "OTA → command '%s'", cmd.arg);
         if (ota_handler_) ota_handler_(cmd.arg);
+        break;
+    }
+    case CommandType::TARE: {
+        ESP_LOGI(TAG, "TARE → re-identify IMU mount and re-reference attitude");
+        if (tare_handler_) tare_handler_();
         break;
     }
     default:

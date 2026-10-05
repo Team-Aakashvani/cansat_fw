@@ -5,11 +5,12 @@ idf_component_register(
     INCLUDE_DIRS
         "include"
     REQUIRES
-        hal
+        app_hal
         drivers
         nav
         driver
         esp_common
+        app_update
         log
         freertos
         esp_timer
