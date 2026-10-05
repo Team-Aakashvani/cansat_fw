@@ -976,7 +976,7 @@ static void boot_led_breathe() {
 
 static void boot_led_result(uint32_t bit_flags) {
     const uint32_t critical = bit::BIT_IMU_ABSENT | bit::BIT_BARO_ABSENT;
-    uint8_t r = 0, g = 120, b = 30;  int n = 2;                     // pass: green
+    uint8_t r = 0, g = 120, b = 0;   int n = 2;                     // pass: pure green
     if (bit_flags & critical)  { r = 160; g = 0;  b = 0;  n = 3; }   // missing sensor: red
     else if (bit_flags)        { r = 150; g = 80; b = 0; }           // warnings: amber
     boot_led_fade(0, 0, 0, 120);
@@ -993,7 +993,7 @@ static void beacon_task(void* /*arg*/) {
     gpio_reset_pin((gpio_num_t)BEACON_PIN);
     gpio_set_direction((gpio_num_t)BEACON_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level((gpio_num_t)BEACON_PIN, 0);
-    set_onboard_rgb(0, 40, 10, true);
+    set_onboard_rgb(0, 50, 0, true);
     uint32_t tick = 0;
 
     while (true) {
@@ -1002,7 +1002,7 @@ static void beacon_task(void* /*arg*/) {
         ++tick;
         bool buzz = false;
         switch (nv.msn.phase) {
-            case nav::MissionPhase::PAD:         set_onboard_rgb(0, 40, 10); break;                 // green
+            case nav::MissionPhase::PAD:         set_onboard_rgb(0, 50, 0); break;                  // green (pure: any blue reads as cyan)
             case nav::MissionPhase::ASCENT:      set_onboard_rgb(140, 60, 0); break;                // orange
             case nav::MissionPhase::DESCENT:     set_onboard_rgb(160, 0, 160); break;               // purple
             case nav::MissionPhase::ARMS_DEPLOY: set_onboard_rgb(0, 60, 160); break;                // blue
