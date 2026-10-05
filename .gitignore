@@ -44,3 +44,13 @@ tools/latest_telemetry.json
 # Host test binaries
 tests/host/build/
 tools/aakashvani_dock_bkp.py
+
+# LaTeX build files (user manual)
+docs/manual/*.aux
+docs/manual/*.log
+docs/manual/*.out
+docs/manual/*.toc
+docs/manual/*.fls
+docs/manual/*.fdb_latexmk
+docs/manual/*.xdv
+docs/manual/user_manual.pdf

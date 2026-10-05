@@ -1,0 +1,8 @@
+# Ground station (dock, 3D viewer, flashing). Install: python -m pip install -r tools\requirements.txt
+customtkinter>=5.2
+pyserial>=3.5
+bleak>=0.22
+websockets>=12
+matplotlib>=3.8
+pillow>=10
+esptool>=4.7
