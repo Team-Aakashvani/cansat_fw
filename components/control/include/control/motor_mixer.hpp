@@ -19,6 +19,8 @@
  *
  * Also controls the release servo (LEDC channel 4).
  */
+// LEGACY: brushed-DC style 5 kHz output, NOT used for flight. Motors: drivers::DShot,
+// arm-latch servos: drivers::ServoPair (see main.cpp control_task).
 #pragma once
 #include "nav/config.hpp"
 #include "driver/ledc.h"
@@ -34,7 +36,7 @@ public:
     static constexpr uint32_t MOTOR_MAX_DUTY    = (1 << MOTOR_RES_BITS) - 1;
 
     static constexpr uint32_t SERVO_FREQ_HZ     = 50;   // 50Hz RC servo standard
-    static constexpr uint32_t SERVO_RES_BITS    = 16;   // 16-bit
+    static constexpr uint32_t SERVO_RES_BITS    = 14;   // ESP32-S3 LEDC maximum (16-bit fails)
     static constexpr uint32_t SERVO_MAX_DUTY    = (1 << SERVO_RES_BITS) - 1;
     static constexpr uint32_t SERVO_CH          = 4;    // LEDC channel for servo
 

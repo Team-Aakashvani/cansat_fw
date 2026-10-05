@@ -9,7 +9,7 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Project name and language standards
 project(cansat_fw
-    VERSION 1.0.0
+    VERSION 2.0.0
     LANGUAGES C CXX
 )
 

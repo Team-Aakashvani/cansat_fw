@@ -47,10 +47,10 @@ def main():
     if use_pyqt:
         print("[Launcher] Launching dedicated PyQt6 Desktop Window...")
         app = QApplication(sys.argv)
-        app.setApplicationName("CAN-7USAT 3D Attitude Visualizer")
+        app.setApplicationName("Aakashvani 3D attitude")
 
         window = QMainWindow()
-        window.setWindowTitle("AAKASHVANI — CAN-7USAT 3D Assembled Body & IMU Attitude Visualizer")
+        window.setWindowTitle("Aakashvani 3D attitude")
         window.resize(1280, 800)
         window.setMinimumSize(960, 640)
 

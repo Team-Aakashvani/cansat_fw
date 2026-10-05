@@ -20,6 +20,9 @@ public:
      */
     void run() noexcept;
 
+    /// Feed one command line from another transport (e.g. Bluetooth LE)
+    void inject_line(const char* line) noexcept;
+
 private:
     config_mgr::NVSConfig& nvs_;
     comms::CommandParser& parser_;

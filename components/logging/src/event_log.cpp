@@ -11,7 +11,8 @@
 #include <cstdio>
 
 static const char* TAG = "EventLog";
-static const char* NVS_NS = "evt_log";
+static const char* NVS_NS   = "evt_log";
+static const char* NVS_PART = "event_log";   ///< dedicated 512 KB partition (keeps wear off the settings NVS)
 
 namespace logging {
 
@@ -19,9 +20,17 @@ esp_err_t EventLog::init() noexcept {
     mutex_ = xSemaphoreCreateMutex();
     if (!mutex_) return ESP_ERR_NO_MEM;
 
+    // Dedicated NVS partition; format it on first use / version change
+    esp_err_t pr = nvs_flash_init_partition(NVS_PART);
+    if (pr == ESP_ERR_NVS_NO_FREE_PAGES || pr == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase_partition(NVS_PART);
+        pr = nvs_flash_init_partition(NVS_PART);
+    }
+    if (pr != ESP_OK) ESP_LOGW(TAG, "event_log partition init failed (%s)", esp_err_to_name(pr));
+
     // Read current write_idx_ from NVS (persists across reboots)
     nvs_handle_t nvs;
-    esp_err_t ret = nvs_open(NVS_NS, NVS_READWRITE, &nvs);
+    esp_err_t ret = nvs_open_from_partition(NVS_PART, NVS_NS, NVS_READWRITE, &nvs);
     if (ret != ESP_OK) {
         // First boot or NVS not initialised
         ESP_LOGW(TAG, "NVS open failed (%d) — event log reset", ret);
@@ -61,7 +70,7 @@ void EventLog::log_event(EventCode code, uint32_t mission_s,
     // Persist indices periodically (every 16 events to reduce NVS wear)
     if ((total_events_ & 0xF) == 0) {
         nvs_handle_t nvs;
-        if (nvs_open(NVS_NS, NVS_READWRITE, &nvs) == ESP_OK) {
+        if (nvs_open_from_partition(NVS_PART, NVS_NS, NVS_READWRITE, &nvs) == ESP_OK) {
             nvs_set_u32(nvs, "widx",  write_idx_);
             nvs_set_u32(nvs, "total", total_events_);
             nvs_commit(nvs);
@@ -81,7 +90,7 @@ void EventLog::log_event(EventCode code, uint32_t mission_s,
 size_t EventLog::read_events(EventRecord* out, size_t max) const noexcept {
     if (!ready_ || !out || max == 0) return 0;
     nvs_handle_t nvs;
-    if (nvs_open(NVS_NS, NVS_READONLY, &nvs) != ESP_OK) return 0;
+    if (nvs_open_from_partition(NVS_PART, NVS_NS, NVS_READONLY, &nvs) != ESP_OK) return 0;
 
     size_t count = 0;
     uint32_t total = total_events_;
@@ -107,7 +116,7 @@ size_t EventLog::read_events(EventRecord* out, size_t max) const noexcept {
 void EventLog::close() noexcept {
     if (!ready_) return;
     nvs_handle_t nvs;
-    if (nvs_open(NVS_NS, NVS_READWRITE, &nvs) == ESP_OK) {
+    if (nvs_open_from_partition(NVS_PART, NVS_NS, NVS_READWRITE, &nvs) == ESP_OK) {
         nvs_set_u32(nvs, "widx",  write_idx_);
         nvs_set_u32(nvs, "total", total_events_);
         nvs_commit(nvs);
@@ -120,7 +129,7 @@ void EventLog::store_record(const EventRecord& r) noexcept {
     char key[16];
     snprintf(key, sizeof(key), "e%04lu", (unsigned long)(write_idx_ % MAX_EVENTS));
     nvs_handle_t nvs;
-    if (nvs_open(NVS_NS, NVS_READWRITE, &nvs) == ESP_OK) {
+    if (nvs_open_from_partition(NVS_PART, NVS_NS, NVS_READWRITE, &nvs) == ESP_OK) {
         nvs_set_blob(nvs, key, &r, sizeof(r));
         nvs_commit(nvs);
         nvs_close(nvs);

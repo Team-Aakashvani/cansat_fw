@@ -1,5 +1,6 @@
 #include "system_init.hpp"
 #include "config_mgr/nvs_config.hpp"
+#include "nav/config.hpp"
 #include "esp_log.h"
 #include "esp_system.h"
 
@@ -23,6 +24,9 @@ esp_err_t core_init() noexcept {
         ESP_LOGE(TAG, "NVS init failed: %s", esp_err_to_name(ret));
         return ret;
     }
+
+    if (nvs_cfg.get_team_id() != nav::TELEM_CFG.team_id)
+        nvs_cfg.set_team_id(nav::TELEM_CFG.team_id);        // stored id follows the firmware
 
     uint32_t boot_cnt = nvs_cfg.increment_boot_count();
     ESP_LOGI(TAG, "Boot #%lu", (unsigned long)boot_cnt);

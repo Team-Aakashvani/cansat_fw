@@ -1,126 +1,117 @@
-# AAKASHVANI — Exhaustive Technical Architecture
-### Professional Avionics Stack for CAN-7USAT India 2026
-> **A deep-dive into the algorithms, task models, and data flow of the Flight Computer.**
+# AAKASHVANI — Software Architecture
+
+How the flight software is built: tasks, data flow, the navigation stack and memory.
+For the mission rules and failsafes see `FLIGHT_SOFTWARE.md`.
 
 ---
 
-## 1. System Topology & Philosophy
+## 1. Platform
 
-The AAKASHVANI architecture is built on the principle of **computational determinism** and **modular decoupling**. It targets the ESP32-S3 WROOM-1, utilizing its dual-core Xtensa LX7 processor to separate high-frequency flight dynamics (Core 0) from lower-frequency system services (Core 1).
+* ESP32-S3-DevKitC-1 **N16R8**: dual-core Xtensa LX7 at 240 MHz, 512 KB internal SRAM,
+  16 MB quad flash, 8 MB octal PSRAM (80 MHz).
+* ESP-IDF 5.5.5, FreeRTOS, C++17.
+* Console on the native USB-Serial-JTAG port (no UART bridge).
 
-### The "Akaash" Standard
-*   **Zero Heap Allocation:** All critical flight buffers and EKF matrices are statically allocated or stack-allocated to prevent runtime memory fragmentation and "Out of Memory" (OOM) failures.
-*   **Header-Only Nav Stack:** The navigation engine is implemented as a template-heavy header-only library, allowing the compiler to perform aggressive inlining and optimization.
-*   **Thread Safety:** Strict mutex-gate access for all shared sensor and flight computer state data.
+## 2. Tasks
 
----
+| Task | Core | Priority | Rate | Job |
+|---|---|---|---|---|
+| `imu` | 0 | max−1 | 100 Hz | BNO055 read, attitude reference (mount detection, level trim, flight lock) |
+| `nav` | 0 | max−2 | 100 Hz | Vertical Kalman filter, mission supervisor, return guidance, flight-recorder feed; the **only** writer of actuator commands |
+| `ctrl` | 0 | max−3 | 100 Hz | Arm-latch servos (LEDC) and DShot300 motor frames (RMT), steering controller |
+| `sensor` | 1 | max−3 | 50 Hz | BMP585, GNSS parsing, SHT4x, SGP41 |
+| `telem` | 1 | 5 | 50 Hz loop | `ATT` (50 Hz), competition frame (25 Hz USB, 1 Hz radio/SD), `MSN`, `HLT`, Bluetooth lines |
+| `logging` | 1 | 4 | 1 Hz | XBee state machine, SD flush |
+| `power` | 1 | 3 | 1 Hz | Battery monitoring |
+| `flightrec` | 1 | 2 | queue | Writes 64-byte records to the flight-log partition, erases ahead on the pad |
+| `beacon` | any | 2 | 25 Hz | RGB LED phase colour and recovery buzzer (status only, no actuators) |
+| `cli`, `ble_cmd`, `test_mgr` | 1 | 1 | event | USB console, Bluetooth command bridge, bench tests |
 
-## 2. Detailed Task Model (FreeRTOS)
+Shared state is passed as snapshots under two mutexes (`sensor_mutex`, `fc_mutex`). Tasks
+never hold a mutex while doing I/O.
 
-### Core 0: The Flight Core (Real-Time)
-Core 0 is dedicated exclusively to the stabilization loop. No I/O blocking or high-latency operations (like SD card writes) are allowed here.
+## 3. Data flow
 
-1.  **`nav_task` (100 Hz, Priority: 31):**
-    *   **Function:** Ingests raw IMU data from the BNO085. Propagates the 16-state EKF using a 2nd-order midpoint integrator.
-    *   **Timing:** Must complete execution in < 10ms. Typical execution: 2.4ms.
-2.  **`control_task` (100 Hz, Priority: 30):**
-    *   **Function:** Executes the Cascaded PID loops. Reads the fused state from `nav_task`, calculates torque corrections, and updates LEDC PWM channels.
-    *   **Safety:** Gated by the `EVT_BIT_PASS` event bit.
+```text
+BNO055 ──► imu_task ──► AttitudeReference ──┐
+BMP585 ──► sensor_task ─────────────────────┼─► nav_task: VerticalKF ─► MissionSupervisor ─► ReturnGuidance
+GNSS   ──► sensor_task ─────────────────────┘                 │                 │
+                                                              │                 ▼
+                                                              │        ctrl_task: SteerController ─► MotorMixer ─► DShot
+                                                              │                  servo latch ◄── arms command
+                                                              ▼
+                                         FlightRecorder (50 Hz) · telem_task (USB / BLE / XBee / SD)
+```
 
-### Core 1: The System Core (Background Services)
-Core 1 manages communication, logging, and environmental monitoring.
+## 4. Navigation stack
 
-1.  **`sensor_task` (50 Hz, Priority: 29):** Polls the BMP585 barometer and I2C-1 environmental sensors. Provides snapshots to the Flight Core via `sensor_mutex`.
-2.  **`telem_task` (1 Hz, Priority: 5):** Snapshots the entire flight computer state, encodes it into the mandatory CSV format, and enqueues it for XBee transmission.
-3.  **`logging_task` (1 Hz, Priority: 4):** Manages the XBee radio's state machine (`spin()`) and flushes the SD card FAT32 buffers every 5 seconds.
-4.  **`power_task` (1 Hz, Priority: 3):** Monitors the INA260 and MAX17048. Executes low-voltage callbacks (e.g., disarming motors at critical levels).
+* **Attitude**: the BNO055 fusion quaternion passes through `AttitudeReference`
+  (`drivers/imu_attitude`). It auto-detects how the IMU is mounted (upright or perpendicular),
+  applies a level trim and outputs a singularity-free ZXY attitude. The reference locks when
+  the flight starts, so `TARE` cannot change it in the air.
+* **Vertical**: `VerticalKF` (`nav/vertical_kf.hpp`) is a 3-state float filter (altitude,
+  vertical speed, accelerometer bias): 100 Hz predict, 50 Hz baro update. Spike protection
+  works in layers: median-of-3, a physical rate limit, a χ² gate, hold-then-resync judged on the
+  baro's own second difference, and a gate bypass while the accelerometer is clipped (BNO055 =
+  ±4 g in fusion mode). Process noise changes with the mission phase.
+* **Mission**: `MissionSupervisor` (`nav/mission.hpp`) moves forward only through PAD → ASCENT →
+  DESCENT → ARMS_DEPLOY → STEERING → LANDED. The state is kept in RTC memory, so a reset in
+  flight resumes the mission. It also has a lift-test profile with building-sized thresholds and
+  the motors hard-inhibited.
+* **Guidance**: `ReturnGuidance` (`nav/guidance.hpp`) is a PI loop on GNSS ground velocity
+  toward the launch site. It learns the wind and outputs a tilt command (limited to 25°).
+* **Control**: `SteerController` (`control/steer_controller.hpp`) is an angle-PI → rate-PID cascade
+  that produces torque, mixed for a quad-X frame in `MotorMixer` and sent as DShot300.
 
----
+The earlier 5 × 15-state IMM is still in `components/nav` for offline comparison, but it is not
+in the flight path. It took ~35 ms per IMU sample in software `double` on the S3, and it had no
+effect on any decision.
 
-## 3. Navigation Stack: The EKF/IMM Engine
+## 5. Links
 
-### 3.1 State Representation
-The filter tracks a 16-dimensional state vector $\mathbf{x}$:
-*   $\mathbf{p} \in \mathbb{R}^3$: Position (East, North, Up)
-*   $\mathbf{v} \in \mathbb{R}^3$: Velocity (m/s)
-*   $\mathbf{q} \in \mathbb{R}^4$: Hamiltonian Quaternion (Body to World)
-*   $\mathbf{b}_a \in \mathbb{R}^3$: Accelerometer Bias
-*   $\mathbf{b}_g \in \mathbb{R}^3$: Gyroscope Bias
+* **USB**: console, full telemetry, flight-log download, bench tests.
+* **Bluetooth LE**: NimBLE peripheral `AAKASHVANI-001`, Nordic UART Service. Sends health,
+  mission, attitude, frame, environment and events. Commands go through `ble_cmd`, which refuses
+  actuator and bulk-flash commands. The link is switched off automatically between launch and
+  landing, except during a lift test.
+* **XBee**: 1 Hz competition frame, gated by `CX,ON`.
 
-### 3.2 Error-State Dynamics
-Instead of the full state, the EKF updates a 15-dimensional error state $\delta\mathbf{x}$. This approach is mathematically superior for attitude estimation as it avoids the singularities of Euler angles and the over-parameterization of quaternions.
-*   **Attitude Error:** Represented as a small rotation vector $\delta\boldsymbol{\theta} \in \mathbb{R}^3$.
-*   **Injection:** The quaternion is updated via $\mathbf{q} \leftarrow \mathbf{q} \otimes \exp(\delta\boldsymbol{\theta}/2)$.
+## 6. Memory
 
-### 3.3 Interacting Multiple Model (IMM)
-The system runs five parallel EKF instances, each with a different process noise covariance $\mathbf{Q}$:
-*   **BOOST:** High $\sigma_a$ to track rocket motor ignition.
-*   **BALLISTIC:** Low $\sigma_a$ for smooth coasting.
-*   **PARACHUTE:** Medium $\sigma_a$ to handle pendulum oscillations.
-*   **DRONE_HOVER:** Tuned for active motor vibrations.
-*   **LANDED:** Ultra-low noise for stationary position locking.
+### Flash (16 MB)
 
----
+| Partition | Offset | Size | Use |
+|---|---|---|---|
+| nvs | 0x9000 | 24 KB | Settings: team id, ground altitude, heading offset, cached position |
+| otadata / phy_init | 0xF000 / 0x11000 | 8 KB / 4 KB | IDF |
+| factory | 0x20000 | 2 MB | Firmware (~730 KB used) |
+| config_store | 0x220000 | 64 KB | Spare NVS |
+| event_log | 0x230000 | 512 KB | Discrete events (NVS) |
+| coredump | 0x2B0000 | 256 KB | ELF core dump of the last panic (CRC32) |
+| (free) | 0x2F0000 | 1 MB | Reserved |
+| flightlog | 0x400000 | 12 MB | Flight-recorder ring |
 
-## 4. Control Subsystem: Cascaded Stability
+### RAM
 
-### 4.1 Dual-Loop Cascaded PID
-The control architecture is split into two layers to ensure high bandwidth and rejection of disturbances:
-1.  **Outer Loop (Position/Angle):** Operates on absolute Euler angles (Roll/Pitch). It generates a "Target Rate" (rad/s) required to bring the drone back to level.
-2.  **Inner Loop (Rate):** Operates on high-frequency IMU gyro data. It compares the "Target Rate" from the outer loop against the "Measured Rate" and generates a torque command.
+* PSRAM is enabled (`CONFIG_SPIRAM`, octal, 80 MHz), with `malloc` falling through to PSRAM
+  for blocks above 16 KB, and 32 KB of internal RAM reserved for DMA/ISR use.
+* NimBLE allocates from PSRAM (`BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL`). The flight-recorder queue
+  is in PSRAM too.
+* Result: **~130 KB free internal heap** with Bluetooth running (it was ~84 KB before PSRAM).
+* Task stacks stay in internal RAM, because flash writes disable the cache.
 
-### 4.2 Quadcopter 'X' Mixing Logic
-The mixer translates the virtual axes (Roll, Pitch, Yaw, Throttle) into physical motor speeds:
-*   `Motor 1 (Front-Left):` $T + R + P + Y$
-*   `Motor 2 (Front-Right):` $T - R + P - Y$
-*   `Motor 3 (Rear-Right):` $T - R - P + Y$
-*   `Motor 4 (Rear-Left):` $T + R - P - Y$
+### Flight recorder
 
-Outputs are clamped to $[1000, 2000]$ µs to prevent ESC desync.
+64-byte records with a CRC-16: one session header per boot, 50 Hz navigation records and event
+records. On readout the ring is memory-mapped in 256 KB windows. Listing all 12 MB takes about
+2 s. Records whose session header has been overwritten are listed as "start overwritten".
 
----
+## 7. Boot sequence
 
-## 5. Data Flow & Communication
-
-### 5.1 Telemetry Pipeline
-1.  **Snapshot:** `telem_task` takes a deep copy of the `FlightComputerOutput`.
-2.  **Formatting:** `TelemetryEncoder` converts floats to fixed-precision strings (e.g., `%.2f`).
-3.  **Transport:** CSV string is passed to the `XBeeLink` queue.
-4.  **Verification:** The GCS confirms the packet using the Team ID prefix and monotonically increasing `PACKET_COUNT`.
-
-### 5.2 Uplink Command Protocol
-All uplink commands follow the format: `<TEAM_ID>,<CMD>,<ARG>\n`.
-*   **CRC Check:** Commands are validated against a 16-bit XOR checksum to prevent accidental trigger during high-interference periods.
-*   **Simulation Injection:** Using the `SIMP`, `SIMG`, and `SIMI` commands, the ground station can feed synthetic sensor data into the EKF for Hardware-In-The-Loop (HIL) testing.
-
----
-
-## 6. Fault Detection & Recovery (FDIR)
-
-### 6.1 SPRT (Sequential Probability Ratio Test)
-For every sensor measurement, the system calculates a log-likelihood ratio. If the measurement consistently deviates from the EKF prediction beyond the statistical threshold:
-*   The sensor is flagged as **FAULTY**.
-*   The EKF weight for that sensor is reduced to zero.
-*   A discrete event is logged to the SD card.
-
-### 6.2 Supervisory State Machine
-The Bayesian Supervisor monitors the probabilities of the IMM filters.
-*   **Launch Detection:** Triggered only if IMM BOOST probability > 0.8 and Accel Z > 2g.
-*   **Deployment Detection:** Triggered by altitude drop < 600m combined with PARACHUTE regime dominance.
-
----
-
-## 7. Memory & Flash Map
-
-### 7.1 Flash Partition Table (8MB)
-| Name | Size | Purpose |
-|------|------|---------|
-| `nvs` | 24KB | Storage for Team ID, Ground Alt, Calibration |
-| `factory`| 3MB | Main Firmware Image |
-| `ota_0` | 3MB | Over-The-Air Update Slot |
-| `event_log`| 1MB | Discrete Flight Events (FAT partition) |
-| `coredump`| 320KB | Binary crash logs |
-
----
-
-*End of Technical Manual. This document is maintained by the SVNIT Flight Software Team.*
+1. `system_init`: NVS, team id (synced to `TELEM_CFG.team_id`), boot counter, crash-dump check.
+2. RGB LED: white fade (power), then blue (buses). An in-flight resume flashes magenta once and
+   skips everything slow.
+3. I²C scan, sensor init, built-in test (BIT).
+4. IMU alignment: the LED breathes violet until the mount is detected.
+5. BIT result on the LED: 2× green = pass, 2× amber = warnings, 3× red = IMU or barometer missing.
+6. Tasks start. The LED shows the mission phase from then on.

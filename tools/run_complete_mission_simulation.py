@@ -16,6 +16,9 @@ import sys
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+# Competition frame: field 19 is the state name; map it to the SOFTWARE_STATE code
+STATE_CODE = {"BOOT": 0, "PAD": 2, "ASCENT": 3, "DESCENT": 4, "ARMS_DEPLOY": 5, "STEERING": 6, "LANDED": 7}
+
 
 PORT = 'COM13'
 BAUD = 115200
@@ -85,13 +88,13 @@ def run_simulation():
     ser.reset_input_buffer()
     
     # 1. Arm simulation mode
-    print("\n[1/3] Arming Simulation Mode (CMD,1234,SIM,ENABLE)...")
-    ser.write(b"CMD,1234,SIM,ENABLE\n")
+    print("\n[1/3] Arming Simulation Mode (CMD,001,SIM,ENABLE)...")
+    ser.write(b"CMD,001,SIM,ENABLE\n")
     time.sleep(0.5)
     
     # 2. Tare pad baseline
-    print("[2/3] Setting Launch Pad Baseline (CMD,1234,CAL)...")
-    ser.write(b"CMD,1234,CAL\n")
+    print("[2/3] Setting Launch Pad Baseline (CMD,001,CAL)...")
+    ser.write(b"CMD,001,CAL\n")
     time.sleep(0.5)
     
     flight_profile = generate_flight_profile()
@@ -112,22 +115,22 @@ def run_simulation():
         stage = step['stage']
         
         # Inject simulated barometric pressure packet
-        cmd = f"CMD,1234,SIMP,{sim_p:.1f}\n"
+        cmd = f"CMD,001,SIMP,{sim_p:.1f}\n"
         ser.write(cmd.encode('utf-8'))
         
         raw_pkt = ""
         t_start = time.time()
         while time.time() - t_start < 1.2:
             raw_line = ser.readline().decode('utf-8', errors='replace').strip()
-            if raw_line.startswith("1234,"):
+            if raw_line.startswith("2026-IN-SPACeCAN-7USAT-001,"):
                 raw_pkt = raw_line
                 parts = raw_line.split(',')
-                if len(parts) >= 16:
+                if len(parts) >= 19:
                     try:
                         fc_alt = float(parts[3])
-                        fc_state = int(parts[15])
-                        pitch = float(parts[12])
-                        roll = float(parts[13])
+                        fc_state = STATE_CODE.get(parts[18].replace("LIFT-", ""), 0)
+                        pitch = float(parts[16])
+                        roll = float(parts[15])
                         break
                     except ValueError:
                         pass
@@ -147,7 +150,7 @@ def run_simulation():
         print(f"{step['t']:>4} | {stage:<24} | {sim_alt:>11.1f} | {sim_p:>10.1f} | {fc_alt:>10.2f} | {fc_state:>5} | {pitch:>6.1f} | {roll:>6.1f}")
 
     # 3. Disable simulation mode
-    ser.write(b"CMD,1234,SIM,DISABLE\n")
+    ser.write(b"CMD,001,SIM,DISABLE\n")
     time.sleep(0.5)
     ser.close()
     

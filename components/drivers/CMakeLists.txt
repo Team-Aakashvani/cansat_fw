@@ -10,6 +10,8 @@ idf_component_register(
         "src/ina260.cpp"
         "src/max17048.cpp"
         "src/cc1101.cpp"
+        "src/dshot.cpp"
+        "src/servo.cpp"
     INCLUDE_DIRS
         "include"
     REQUIRES
@@ -20,4 +22,6 @@ idf_component_register(
         log
         freertos
         esp_timer
+        esp_driver_rmt
+        esp_driver_ledc
 )

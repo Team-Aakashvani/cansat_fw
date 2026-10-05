@@ -3,226 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CanSat CAN-7USAT (REV_H) - 3D CAD Viewer</title>
-    <style>
-        :root {
-            --bg-color: #1a1e24;
-            --panel-bg: rgba(26, 32, 44, 0.92);
-            --panel-border: #3d4a5d;
-            --accent: #00b4d8;
-            --accent-hover: #48cae4;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: var(--text);
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
-        #canvas-container {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-        header {
-            position: absolute;
-            top: 16px;
-            left: 16px;
-            z-index: 100;
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--panel-border);
-            padding: 12px 20px;
-            border-radius: 10px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-        header h1 {
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            color: #fff;
-        }
-        header .badge {
-            background: #0284c7;
-            color: #fff;
-            font-size: 11px;
-            font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 6px;
-        }
-        #sidebar {
-            position: absolute;
-            top: 80px;
-            left: 16px;
-            bottom: 20px;
-            width: 350px;
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
-            padding: 16px;
-            overflow-y: auto;
-            z-index: 100;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        .section-title {
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--accent);
-            border-bottom: 1px solid var(--panel-border);
-            padding-bottom: 6px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .slider-row {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .slider-label {
-            font-size: 12px;
-            color: var(--text-muted);
-            display: flex;
-            justify-content: space-between;
-        }
-        input[type="range"] {
-            width: 100%;
-            accent-color: var(--accent);
-            cursor: pointer;
-        }
-        .btn-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-        }
-        .btn {
-            background: #334155;
-            color: var(--text);
-            border: 1px solid var(--panel-border);
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            text-align: center;
-        }
-        .btn:hover {
-            background: #475569;
-            border-color: var(--accent);
-            color: #fff;
-        }
-        .btn.active {
-            background: #0284c7;
-            border-color: #38bdf8;
-            color: #fff;
-        }
-        .tree-list {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .tree-category {
-            font-size: 12px;
-            font-weight: 700;
-            margin-top: 6px;
-            color: #38bdf8;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .tree-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 6px 8px;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 6px;
-            font-size: 12px;
-            transition: background 0.2s;
-        }
-        .tree-item:hover {
-            background: rgba(255,255,255,0.09);
-        }
-        .tree-item label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            width: 100%;
-        }
-        .color-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            display: inline-block;
-            flex-shrink: 0;
-            border: 1px solid rgba(255,255,255,0.3);
-        }
-        input[type="checkbox"] {
-            accent-color: var(--accent);
-            cursor: pointer;
-        }
-        #stats-bar {
-            position: absolute;
-            bottom: 16px;
-            right: 16px;
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--panel-border);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 12px;
-            color: var(--text-muted);
-            z-index: 100;
-            display: flex;
-            gap: 16px;
-        }
-        #stats-bar span b {
-            color: #fff;
-        }
-        #loading {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #0f172a;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            transition: opacity 0.4s ease;
-        }
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid #334155;
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 16px;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-    </style>
+    <title>Aakashvani 3D attitude</title>
     <script>
     // Embedded Three.js Core
     /**
@@ -4918,436 +4699,204 @@
 
 </head>
 <body>
+<style>
+    @font-face { font-family: "Plex Sans"; src: url("/fonts/IBMPlexSans-Regular.ttf"); font-weight: 400; }
+    @font-face { font-family: "Plex Sans"; src: url("/fonts/IBMPlexSans-Medium.ttf"); font-weight: 500; }
+    @font-face { font-family: "Plex Sans"; src: url("/fonts/IBMPlexSans-SemiBold.ttf"); font-weight: 600; }
+    @font-face { font-family: "Plex Mono"; src: url("/fonts/IBMPlexMono-Regular.ttf"); font-weight: 400; }
+    @font-face { font-family: "Plex Mono"; src: url("/fonts/IBMPlexMono-Medium.ttf"); font-weight: 500; }
+    @font-face { font-family: "Lucide"; src: url("/icons/lucide.ttf"); }
 
-    <style>
-        :root {
-            --bg-color: #0d1117;
-            --panel-bg: rgba(18, 24, 38, 0.92);
-            --panel-border: rgba(56, 189, 248, 0.25);
-            --accent: #00d2ff;
-            --accent-glow: rgba(0, 210, 255, 0.4);
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --pitch-color: #38bdf8;
-            --roll-color: #34d399;
-            --yaw-color: #f59e0b;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Consolas', monospace;
-            background: radial-gradient(circle at center, #111827 0%, #030712 100%);
-            color: var(--text);
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-            user-select: none;
-        }
-        #canvas-container {
-            width: 100%;
-            height: 100%;
-            display: block;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-        }
+    :root {
+        --bg: #0E1116;
+        --panel: rgba(21, 25, 32, 0.94);
+        --raised: #1B2028;
+        --hover: #232933;
+        --line: #262C35;
+        --text: #E4E7EB;
+        --muted: #8B95A3;
+        --faint: #5A6370;
+        --accent: #E9A23B;
+        --ok: #3FB27F;
+        --bad: #E5484D;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: "Plex Sans", "Segoe UI", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        overflow: hidden;
+        height: 100vh; width: 100vw;
+        user-select: none;
+        font-size: 13px;
+    }
+    .mono { font-family: "Plex Mono", Consolas, monospace; }
+    .ic { font-family: "Lucide"; font-size: 15px; line-height: 1; color: var(--muted); }
+    #canvas-container { position: absolute; inset: 52px 0 0 0; z-index: 1; }
 
-        /* Top Bar */
-        header {
-            position: absolute;
-            top: 14px;
-            left: 16px;
-            z-index: 100;
-            background: var(--panel-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--panel-border);
-            padding: 10px 18px;
-            border-radius: 10px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-        header h1 {
-            font-size: 15px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            color: #fff;
-        }
-        header .badge {
-            background: #0284c7;
-            color: #fff;
-            font-size: 11px;
-            font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 6px;
-            text-transform: uppercase;
-        }
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 3px 8px;
-            border-radius: 6px;
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid #334155;
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #ef4444;
-            box-shadow: 0 0 8px #ef4444;
-            transition: all 0.3s;
-        }
-        .status-dot.connected {
-            background: #10b981;
-            box-shadow: 0 0 10px #10b981;
-        }
+    /* Top bar */
+    header {
+        position: absolute; top: 0; left: 0; right: 0; height: 52px; z-index: 100;
+        background: #151920; border-bottom: 1px solid var(--line);
+        display: flex; align-items: center; gap: 16px; padding: 0 20px;
+    }
+    header .brand { font-weight: 600; font-size: 16px; }
+    header .brand span { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 6px; }
+    header .phase {
+        margin-left: 18px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
+        background: var(--raised); border: 1px solid var(--line); color: var(--text);
+    }
+    header .spacer { flex: 1; }
+    .status-indicator { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
+    .status-dot.connected { background: var(--ok); }
 
-        /* Top Right: Real-time Attitude Gauges */
-        #attitude-hud {
-            position: absolute;
-            top: 14px;
-            right: 16px;
-            z-index: 100;
-            display: flex;
-            gap: 10px;
-        }
-        .hud-card {
-            background: var(--panel-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
-            padding: 8px 16px;
-            min-width: 100px;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
-        }
-        .hud-title {
-            font-size: 10px;
-            font-weight: 700;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-        .hud-value {
-            font-size: 20px;
-            font-weight: 800;
-            font-family: 'Consolas', monospace;
-            margin-top: 2px;
-        }
-        .val-pitch { color: var(--pitch-color); }
-        .val-roll  { color: var(--roll-color); }
-        .val-yaw   { color: var(--yaw-color); }
+    /* Panels */
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+    #sidebar {
+        position: absolute; top: 68px; left: 16px; bottom: 16px; width: 290px; z-index: 100;
+        padding: 6px 0; overflow-y: auto;
+    }
+    #sidebar::-webkit-scrollbar { width: 8px; }
+    #sidebar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+    .control-group { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+    .control-group:last-child { border-bottom: 0; }
+    .section-title {
+        font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint);
+        display: flex; align-items: center; gap: 8px;
+    }
+    .slider-row { display: flex; flex-direction: column; gap: 6px; }
+    .slider-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .slider-label span:last-child { font-family: "Plex Mono", Consolas, monospace; color: var(--text); }
+    input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+    .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .btn-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        background: var(--raised); color: var(--text); border: 1px solid var(--line);
+        padding: 7px 8px; border-radius: 7px; font: 500 12px "Plex Sans", "Segoe UI", sans-serif;
+        cursor: pointer; transition: background 0.12s;
+    }
+    .btn:hover { background: var(--hover); }
+    .btn.active { background: #343C48; border-color: #3B4451; }
+    .btn.active .ic { color: var(--accent); }
+    .btn-action { background: var(--accent); border-color: var(--accent); color: #1A1205; }
+    .btn-action:hover { background: #D18E2C; }
+    .check-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .check-row input { accent-color: var(--accent); cursor: pointer; }
+    details > summary { cursor: pointer; list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] > summary .chev { transform: rotate(90deg); }
+    .chev { margin-left: auto; transition: transform 0.15s; font-size: 13px; }
+    body:not(.sim-mode) #sim-controls { display: none; }
 
-        /* Left Sidebar: Controls & Options */
-        #sidebar {
-            position: absolute;
-            top: 72px;
-            left: 16px;
-            bottom: 20px;
-            width: 320px;
-            background: var(--panel-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
-            padding: 14px;
-            overflow-y: auto;
-            z-index: 100;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
+    /* Readouts, top right */
+    #attitude-hud { position: absolute; top: 68px; right: 16px; z-index: 100; display: flex; flex-direction: column; gap: 8px; width: 200px; }
+    .hud-card { padding: 10px 14px; }
+    .hud-title { font-size: 11px; color: var(--muted); }
+    .hud-value { font: 500 24px "Plex Mono", Consolas, monospace; margin-top: 2px; color: var(--text); }
+    .hud-sub { font-size: 11px; color: var(--faint); margin-top: 2px; }
 
-        .section-title {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--accent);
-            border-bottom: 1px solid rgba(56, 189, 248, 0.2);
-            padding-bottom: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .slider-row {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .slider-label {
-            font-size: 11px;
-            color: var(--text-muted);
-            display: flex;
-            justify-content: space-between;
-        }
-        input[type="range"] {
-            width: 100%;
-            accent-color: var(--accent);
-            cursor: pointer;
-            height: 6px;
-            background: #1e293b;
-            border-radius: 3px;
-        }
-        .btn-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-        }
-        .btn-grid-2 {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 6px;
-        }
-        .btn {
-            background: #1e293b;
-            color: var(--text);
-            border: 1px solid #334155;
-            padding: 6px 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            text-align: center;
-        }
-        .btn:hover {
-            background: #334155;
-            border-color: var(--accent);
-            color: #fff;
-        }
-        .btn.active {
-            background: #0284c7;
-            border-color: #38bdf8;
-            color: #fff;
-        }
-        .btn-action {
-            background: #0ea5e9;
-            color: #fff;
-            border-color: #38bdf8;
-        }
-        .btn-action:hover {
-            background: #0284c7;
-        }
+    /* Stats, bottom right */
+    #telemetry-stats {
+        position: absolute; bottom: 16px; right: 16px; z-index: 100; padding: 10px 16px;
+        display: flex; gap: 20px; font-size: 12px; color: var(--muted);
+    }
+    #telemetry-stats b { font: 500 12px "Plex Mono", Consolas, monospace; color: var(--text); margin-left: 4px; }
 
-        /* Checkbox Rows */
-        .check-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--text-muted);
-        }
-        .check-row input[type="checkbox"] {
-            accent-color: var(--accent);
-            cursor: pointer;
-        }
+    /* Horizon instrument, bottom centre */
+    #horizon-overlay {
+        position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 100;
+        width: 148px; height: 148px; border-radius: 50%; overflow: hidden; pointer-events: none;
+        border: 2px solid var(--line); background: #151920;
+    }
+    #horizon-canvas { width: 100%; height: 100%; }
 
-        /* Bottom Floating Stats Bar */
-        #telemetry-stats {
-            position: absolute;
-            bottom: 14px;
-            right: 16px;
-            z-index: 100;
-            background: var(--panel-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--panel-border);
-            padding: 8px 16px;
-            border-radius: 10px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
-            display: flex;
-            gap: 16px;
-            font-size: 11px;
-            font-family: 'Consolas', monospace;
-        }
-        #telemetry-stats span b {
-            color: var(--accent);
-        }
-
-        /* Artificial Horizon overlay in lower center */
-        #horizon-overlay {
-            position: absolute;
-            bottom: 14px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            width: 140px;
-            height: 140px;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(12px);
-            border: 2px solid var(--panel-border);
-            border-radius: 50%;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.8);
-            overflow: hidden;
-            pointer-events: none;
-        }
-        #horizon-canvas {
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Loading Overlay */
-        #loading {
-            position: absolute;
-            inset: 0;
-            z-index: 999;
-            background: #090d16;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            transition: opacity 0.5s ease;
-        }
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid #1e293b;
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-    </style>
-</head>
-<body>
+    /* Loading */
+    #loading {
+        position: absolute; inset: 0; z-index: 999; background: var(--bg);
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        transition: opacity 0.4s ease;
+    }
+    #loading h2 { font-weight: 500; font-size: 15px; }
+    #loading p { color: var(--muted); font-size: 12px; }
+    .spinner { width: 30px; height: 30px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
 
 <div id="loading">
     <div class="spinner"></div>
-    <h2>Loading CanSat 3D Assembly & IMU Engine...</h2>
-    <p style="color: #64748b; font-size: 12px;">CAN-7USAT REV_H Full Assembled CAD Body</p>
+    <h2>Loading the CanSat model</h2>
+    <p>CAN-7USAT assembly, revision H</p>
 </div>
 
 <header>
-    <h1>CAN-7USAT Vehicle</h1>
-    <span class="badge" id="flight-state-badge">IDLE (0)</span>
+    <div class="brand">Aakashvani<span>3D attitude</span></div>
+    <div class="phase" id="flight-state-badge">Waiting for data</div>
+    <div class="spacer"></div>
     <div class="status-indicator">
         <span class="status-dot" id="status-dot"></span>
-        <span id="status-text">CONNECTING...</span>
+        <span id="status-text">Connecting...</span>
     </div>
 </header>
 
-<!-- Attitude Gauges -->
 <div id="attitude-hud">
-    <div class="hud-card">
-        <div class="hud-title">Pitch (Tilt X)</div>
-        <div class="hud-value val-pitch" id="hud-pitch">+0.0°</div>
+    <div class="hud-card panel">
+        <div class="hud-title">Tilt X (pitch)</div>
+        <div class="hud-value" id="hud-pitch">+0.0°</div>
     </div>
-    <div class="hud-card">
-        <div class="hud-title">Roll (Bank Y)</div>
-        <div class="hud-value val-roll" id="hud-roll">+0.0°</div>
+    <div class="hud-card panel">
+        <div class="hud-title">Tilt Y (roll)</div>
+        <div class="hud-value" id="hud-roll">+0.0°</div>
     </div>
-    <div class="hud-card">
-        <div class="hud-title">Yaw (Heading)</div>
-        <div class="hud-value val-yaw" id="hud-yaw">0.0°</div>
+    <div class="hud-card panel">
+        <div class="hud-title">Heading</div>
+        <div class="hud-value" id="hud-yaw">0.0°</div>
     </div>
-    <div class="hud-card">
-        <div class="hud-title">IMU Link</div>
+    <div class="hud-card panel">
+        <div class="hud-title">Attitude stream</div>
         <div class="hud-value" id="hud-link">— Hz</div>
-        <div class="hud-title" id="hud-link-sub" style="margin-top:2px;">MCU — · —</div>
+        <div class="hud-sub" id="hud-link-sub">MCU — · —</div>
     </div>
 </div>
 
-<!-- Controls Sidebar -->
-<div id="sidebar">
-    <!-- Telemetry Source Mode -->
+<div id="sidebar" class="panel">
     <div class="control-group">
-        <div class="section-title">Telemetry Mode</div>
+        <div class="section-title">Source</div>
         <div class="btn-grid-2">
-            <button class="btn active" id="btn-mode-live" onclick="setMode('live')">📡 Live Serial</button>
-            <button class="btn" id="btn-mode-sim" onclick="setMode('sim')">🧪 Manual Sim</button>
+            <button class="btn active" id="btn-mode-live" onclick="setMode('live')"><span class="ic">&#xe146;</span>Live</button>
+            <button class="btn" id="btn-mode-sim" onclick="setMode('sim')"><span class="ic">&#xe104;</span>Manual</button>
         </div>
     </div>
 
-    <!-- Interactive Simulation Sliders -->
     <div class="control-group" id="sim-controls">
-        <div class="section-title">Manual IMU Rotation</div>
+        <div class="section-title">Manual rotation</div>
         <div class="slider-row">
-            <div class="slider-label">
-                <span style="color:var(--pitch-color);">Pitch (Nose Up/Dn)</span>
-                <span id="slider-pitch-val">0°</span>
-            </div>
+            <div class="slider-label"><span>Tilt X</span><span id="slider-pitch-val">0°</span></div>
             <input type="range" id="slider-pitch" min="-90" max="90" value="0" oninput="onSimSliderChange()">
         </div>
         <div class="slider-row">
-            <div class="slider-label">
-                <span style="color:var(--roll-color);">Roll (Bank Angle)</span>
-                <span id="slider-roll-val">0°</span>
-            </div>
+            <div class="slider-label"><span>Tilt Y</span><span id="slider-roll-val">0°</span></div>
             <input type="range" id="slider-roll" min="-180" max="180" value="0" oninput="onSimSliderChange()">
         </div>
         <div class="slider-row">
-            <div class="slider-label">
-                <span style="color:var(--yaw-color);">Yaw (Heading)</span>
-                <span id="slider-yaw-val">0°</span>
-            </div>
+            <div class="slider-label"><span>Heading</span><span id="slider-yaw-val">0°</span></div>
             <input type="range" id="slider-yaw" min="0" max="360" value="0" oninput="onSimSliderChange()">
         </div>
-        <div class="btn-grid" style="margin-top: 4px;">
-            <button class="btn" onclick="setSimPreset(0, 0, 0)">Level</button>
-            <button class="btn" onclick="setSimPreset(45, 0, 0)">Pitch +45°</button>
-            <button class="btn" onclick="setSimPreset(0, 45, 0)">Roll +45°</button>
-            <button class="btn" onclick="setSimPreset(-90, 0, 0)">Nose Down</button>
-            <button class="btn" onclick="setSimPreset(0, 180, 0)">Inverted</button>
-            <button class="btn" id="btn-test-wave" onclick="toggleTestWave()">Sine Wave</button>
-        </div>
-    </div>
-
-    <!-- Orientation Offsets & Inversions -->
-    <div class="control-group">
-        <div class="section-title">Calibration & Axes</div>
-        <div class="btn-grid-2">
-            <button class="btn btn-action" onclick="zeroAttitude()">Zero Tare</button>
-            <button class="btn" onclick="resetAttitude()">Reset Offset</button>
-        </div>
-        <div class="slider-row" style="margin-top: 6px;">
-            <div class="slider-label">
-                <span>Playout Buffer (smoothing vs latency)</span>
-                <span id="lerp-val">Fast (45 ms)</span>
-            </div>
-            <input type="range" id="lerp-slider" min="10" max="100" value="70" oninput="onLerpSliderChange(this.value)">
-        </div>
-        <div class="check-row">
-            <span>Upright Orientation (180° Flip)</span>
-            <input type="checkbox" id="chk-flip-upright" onchange="toggleUpright(this.checked)">
-        </div>
-        <div class="check-row">
-            <span>Invert Pitch</span>
-            <input type="checkbox" id="chk-inv-pitch" onchange="attitude.invertPitch = this.checked">
-        </div>
-        <div class="check-row">
-            <span>Invert Roll</span>
-            <input type="checkbox" id="chk-inv-roll" onchange="attitude.invertRoll = this.checked">
-        </div>
-        <div class="check-row">
-            <span>Invert Yaw</span>
-            <input type="checkbox" id="chk-inv-yaw" onchange="attitude.invertYaw = this.checked">
-        </div>
-        <div class="check-row">
-            <span>Show Body Axes (XYZ)</span>
-            <input type="checkbox" id="chk-show-axes" checked onchange="toggleBodyAxes(this.checked)">
-        </div>
-        <div class="check-row">
-            <span>Show World Reference Grid</span>
-            <input type="checkbox" id="chk-show-grid" checked onchange="toggleWorldGrid(this.checked)">
-        </div>
-    </div>
-
-    <!-- Camera Presets -->
-    <div class="control-group">
-        <div class="section-title">Camera Views</div>
         <div class="btn-grid">
-            <button class="btn" onclick="setView('iso')">Isometric</button>
+            <button class="btn" onclick="setSimPreset(0, 0, 0)">Level</button>
+            <button class="btn" onclick="setSimPreset(45, 0, 0)">X +45°</button>
+            <button class="btn" onclick="setSimPreset(0, 45, 0)">Y +45°</button>
+            <button class="btn" onclick="setSimPreset(-90, 0, 0)">X −90°</button>
+            <button class="btn" onclick="setSimPreset(0, 180, 0)">Inverted</button>
+            <button class="btn" id="btn-test-wave" onclick="toggleTestWave()">Sweep</button>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <div class="section-title">Camera</div>
+        <div class="btn-grid">
+            <button class="btn" onclick="setView('iso')">Iso</button>
             <button class="btn" onclick="setView('chase')">Follow</button>
             <button class="btn" onclick="setView('front')">Front</button>
             <button class="btn" onclick="setView('side')">Side</button>
@@ -5356,38 +4905,47 @@
         </div>
     </div>
 
-    <!-- CAD Visualization Features -->
     <div class="control-group">
-        <div class="section-title">CAD Visual Controls</div>
+        <div class="section-title">Model</div>
         <div class="slider-row">
-            <div class="slider-label">
-                <span>Outer Hull Opacity</span>
-                <span id="opacity-val">50%</span>
-            </div>
+            <div class="slider-label"><span>Outer shell opacity</span><span id="opacity-val">50%</span></div>
             <input type="range" id="opacity-slider" min="0" max="100" value="50">
         </div>
         <div class="slider-row">
-            <div class="slider-label">
-                <span>Exploded View</span>
-                <span id="explode-val">0%</span>
-            </div>
+            <div class="slider-label"><span>Exploded view</span><span id="explode-val">0%</span></div>
             <input type="range" id="explode-slider" min="0" max="100" value="0">
         </div>
+        <div class="check-row"><span>Body axes</span><input type="checkbox" id="chk-show-axes" checked onchange="toggleBodyAxes(this.checked)"></div>
+        <div class="check-row"><span>Ground grid</span><input type="checkbox" id="chk-show-grid" checked onchange="toggleWorldGrid(this.checked)"></div>
     </div>
+
+    <details class="control-group">
+        <summary class="section-title">Advanced <span class="ic chev">&#xe073;</span></summary>
+        <div class="btn-grid-2">
+            <button class="btn btn-action" onclick="zeroAttitude()">Zero view</button>
+            <button class="btn" onclick="resetAttitude()">Clear zero</button>
+        </div>
+        <div class="slider-row">
+            <div class="slider-label"><span>Smoothing buffer</span><span id="lerp-val">Fast (45 ms)</span></div>
+            <input type="range" id="lerp-slider" min="10" max="100" value="70" oninput="onLerpSliderChange(this.value)">
+        </div>
+        <div class="check-row"><span>Flip upright (180°)</span><input type="checkbox" id="chk-flip-upright" onchange="toggleUpright(this.checked)"></div>
+        <div class="check-row"><span>Invert tilt X</span><input type="checkbox" id="chk-inv-pitch" onchange="attitude.invertPitch = this.checked"></div>
+        <div class="check-row"><span>Invert tilt Y</span><input type="checkbox" id="chk-inv-roll" onchange="attitude.invertRoll = this.checked"></div>
+        <div class="check-row"><span>Invert heading</span><input type="checkbox" id="chk-inv-yaw" onchange="attitude.invertYaw = this.checked"></div>
+    </details>
 </div>
 
-<!-- Artificial Horizon Gauge -->
 <div id="horizon-overlay">
-    <canvas id="horizon-canvas" width="140" height="140"></canvas>
+    <canvas id="horizon-canvas" width="148" height="148"></canvas>
 </div>
 
-<!-- Bottom Telemetry Bar -->
-<div id="telemetry-stats">
-    <span>ALT: <b id="stat-alt">0.0 m</b></span>
-    <span>PRES: <b id="stat-pres">1013.2 hPa</b></span>
-    <span>TEMP: <b id="stat-temp">25.0 °C</b></span>
-    <span>BATT: <b id="stat-volt">7.40 V</b></span>
-    <span>PKTS: <b id="stat-pkts">0</b></span>
+<div id="telemetry-stats" class="panel">
+    <span>Altitude<b id="stat-alt">0.0 m</b></span>
+    <span>Pressure<b id="stat-pres">— hPa</b></span>
+    <span>Air<b id="stat-temp">— °C</b></span>
+    <span>Battery<b id="stat-volt">— V</b></span>
+    <span>Packets<b id="stat-pkts">0</b></span>
 </div>
 
 <div id="canvas-container"></div>
@@ -5449,34 +5007,34 @@
 
     // Vibrant aerospace color coding matching CAD assembly modules
     const moduleMeta = {
-        'Outer_Body': { cat: '01 Outer Structure', color: '#90a4ae', explodeDir: [0, 0, 0] },
-        'Bay_Bottom_Disc': { cat: '05 Electronics Bay', color: '#455a64', explodeDir: [0, 0, -1.2] },
-        'Bay_Cage': { cat: '05 Electronics Bay', color: '#0288d1', explodeDir: [0, 0, -0.6] },
-        'Bay_Battery_Rack': { cat: '05 Electronics Bay', color: '#f59e0b', explodeDir: [0.8, 0, -0.4] },
-        'Bay_Hatch_Door': { cat: '05 Electronics Bay', color: '#374151', explodeDir: [0, 0, -1.8] },
-        'Bay_Camera_Holder': { cat: '05 Electronics Bay', color: '#10b981', explodeDir: [0, -0.8, -0.8] },
-        'Bay_Pitot_Mount': { cat: '05 Electronics Bay', color: '#8b5cf6', explodeDir: [0, 0.8, -0.8] },
+        'Outer_Body': { cat: '01 Outer Structure', color: '#AEB6C1', explodeDir: [0, 0, 0] },
+        'Bay_Bottom_Disc': { cat: '05 Electronics Bay', color: '#4B5563', explodeDir: [0, 0, -1.2] },
+        'Bay_Cage': { cat: '05 Electronics Bay', color: '#5B7A99', explodeDir: [0, 0, -0.6] },
+        'Bay_Battery_Rack': { cat: '05 Electronics Bay', color: '#C9973F', explodeDir: [0.8, 0, -0.4] },
+        'Bay_Hatch_Door': { cat: '05 Electronics Bay', color: '#3A414C', explodeDir: [0, 0, -1.8] },
+        'Bay_Camera_Holder': { cat: '05 Electronics Bay', color: '#6E8FA8', explodeDir: [0, -0.8, -0.8] },
+        'Bay_Pitot_Mount': { cat: '05 Electronics Bay', color: '#6E8FA8', explodeDir: [0, 0.8, -0.8] },
         'Turbine_Shaft': { cat: '03 Turbine Generator', color: '#e2e8f0', explodeDir: [0, 0, 0.4] },
         'Turbine_Spacer_Lower': { cat: '03 Turbine Generator', color: '#94a3b8', explodeDir: [0, 0, 0.3] },
-        'Turbine_Rotor_1': { cat: '03 Turbine Generator', color: '#ef4444', explodeDir: [0, 0, 0.5] },
+        'Turbine_Rotor_1': { cat: '03 Turbine Generator', color: '#A8775A', explodeDir: [0, 0, 0.5] },
         'Turbine_Spacer_Mid': { cat: '03 Turbine Generator', color: '#94a3b8', explodeDir: [0, 0, 0.6] },
-        'Turbine_Rotor_2': { cat: '03 Turbine Generator', color: '#f97316', explodeDir: [0, 0, 0.7] },
+        'Turbine_Rotor_2': { cat: '03 Turbine Generator', color: '#A8775A', explodeDir: [0, 0, 0.7] },
         'Turbine_Spacer_Upper': { cat: '03 Turbine Generator', color: '#94a3b8', explodeDir: [0, 0, 0.8] },
         'Turbine_Shaft_Bushing': { cat: '03 Turbine Generator', color: '#94a3b8', explodeDir: [0, 0, 0.9] },
-        'Drone_Frame': { cat: '02 Drone Deployment', color: '#0284c7', explodeDir: [0, 0, 1.1] },
+        'Drone_Frame': { cat: '02 Drone Deployment', color: '#4F6F6A', explodeDir: [0, 0, 1.1] },
         'Drone_Rod': { cat: '02 Drone Deployment', color: '#cbd5e1', explodeDir: [0, 0, 1.4] },
-        'Drone_Latch_Plate': { cat: '02 Drone Deployment', color: '#eab308', explodeDir: [0, 0, 1.6] },
+        'Drone_Latch_Plate': { cat: '02 Drone Deployment', color: '#C9973F', explodeDir: [0, 0, 1.6] },
         'Drone_Top_Plate': { cat: '02 Drone Deployment', color: '#475569', explodeDir: [0, 0, 1.8] },
-        'Drone_Arm_PosX': { cat: '02 Drone Deployment', color: '#06b6d4', explodeDir: [1.2, 0, 1.3] },
-        'Drone_Arm_PosY': { cat: '02 Drone Deployment', color: '#06b6d4', explodeDir: [0, 1.2, 1.3] },
-        'Drone_Arm_NegX': { cat: '02 Drone Deployment', color: '#06b6d4', explodeDir: [-1.2, 0, 1.3] },
-        'Drone_Arm_NegY': { cat: '02 Drone Deployment', color: '#06b6d4', explodeDir: [0, -1.2, 1.3] },
+        'Drone_Arm_PosX': { cat: '02 Drone Deployment', color: '#6F9690', explodeDir: [1.2, 0, 1.3] },
+        'Drone_Arm_PosY': { cat: '02 Drone Deployment', color: '#6F9690', explodeDir: [0, 1.2, 1.3] },
+        'Drone_Arm_NegX': { cat: '02 Drone Deployment', color: '#6F9690', explodeDir: [-1.2, 0, 1.3] },
+        'Drone_Arm_NegY': { cat: '02 Drone Deployment', color: '#6F9690', explodeDir: [0, -1.2, 1.3] },
         'Drone_Pin_PosX': { cat: '02 Drone Deployment', color: '#f1f5f9', explodeDir: [1.5, 0, 1.8] },
         'Drone_Pin_PosY': { cat: '02 Drone Deployment', color: '#f1f5f9', explodeDir: [0, 1.5, 1.8] },
         'Drone_Pin_NegX': { cat: '02 Drone Deployment', color: '#f1f5f9', explodeDir: [-1.5, 0, 1.8] },
         'Drone_Pin_NegY': { cat: '02 Drone Deployment', color: '#f1f5f9', explodeDir: [0, -1.5, 1.8] },
-        'Parachute_Bay': { cat: '04 Parachute System', color: '#ea580c', explodeDir: [0, 0, 2.2] },
-        'Parachute_Lid': { cat: '04 Parachute System', color: '#dc2626', explodeDir: [0, 0, 2.6] }
+        'Parachute_Bay': { cat: '04 Parachute System', color: '#B8693A', explodeDir: [0, 0, 2.2] },
+        'Parachute_Lid': { cat: '04 Parachute System', color: '#9E5530', explodeDir: [0, 0, 2.6] }
     };
 
     // ---------------------------------------------------------------------
@@ -5567,12 +5125,12 @@
         scene = new THREE.Scene();
 
         // Standard aerospace coordinates: Z points UP towards sky
-        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 4000);
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 4000);
         camera.position.set(380, -320, 220);
         camera.up.set(0, 0, 1);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(container.clientWidth, container.clientHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.3;
@@ -5603,14 +5161,14 @@
         scene.add(rimLight);
 
         // Inertial Ground Reference Plane / Grid
-        worldGrid = new THREE.GridHelper(700, 35, 0x0284c7, 0x1e293b);
+        worldGrid = new THREE.GridHelper(700, 35, 0x343c48, 0x1f252e);
         worldGrid.rotation.x = Math.PI / 2;
         worldGrid.position.z = -220; // Just below bottom of vehicle
         scene.add(worldGrid);
 
         // Horizon Disc Ring (subtle aerospace attitude reference)
         const ringGeo = new THREE.RingGeometry(240, 244, 64);
-        const ringMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xE9A23B, side: THREE.DoubleSide, transparent: true, opacity: 0.22 });
         horizonRing = new THREE.Mesh(ringGeo, ringMat);
         horizonRing.position.z = 0;
         scene.add(horizonRing);
@@ -5681,7 +5239,7 @@
 
                 const name = child.name || 'Part';
                 let metaKey = Object.keys(moduleMeta).find(k => name.includes(k)) || name;
-                let meta = moduleMeta[metaKey] || { cat: 'Other', color: '#38bdf8', explodeDir: [0,0,0] };
+                let meta = moduleMeta[metaKey] || { cat: 'Other', color: '#8E99A6', explodeDir: [0,0,0] };
 
                 const mat = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(meta.color),
@@ -5716,7 +5274,7 @@
             ws.onopen = function() {
                 isConnected = true;
                 document.getElementById('status-dot').className = 'status-dot connected';
-                document.getElementById('status-text').innerText = 'LIVE TELEMETRY';
+                document.getElementById('status-text').innerText = 'Live';
             };
             ws.onmessage = function(event) {
                 try {
@@ -5729,7 +5287,7 @@
             ws.onclose = function() {
                 isConnected = false;
                 document.getElementById('status-dot').className = 'status-dot';
-                document.getElementById('status-text').innerText = 'HTTP TELEMETRY';
+                document.getElementById('status-text').innerText = 'Reconnecting...';
                 setTimeout(initWebSocket, 2000);
             };
             ws.onerror = function() {
@@ -5779,11 +5337,11 @@
         if (data.alt !== undefined && data.alt !== null) document.getElementById('stat-alt').innerText = Number(data.alt).toFixed(1) + ' m';
         if (data.pres !== undefined && data.pres !== null) document.getElementById('stat-pres').innerText = (Number(data.pres) / 100.0).toFixed(1) + ' hPa';
         if (data.temp !== undefined && data.temp !== null) document.getElementById('stat-temp').innerText = Number(data.temp).toFixed(1) + ' °C';
-        if (data.volt !== undefined && data.volt !== null) document.getElementById('stat-volt').innerText = Number(data.volt).toFixed(2) + ' V';
+        if (data.volt !== undefined && data.volt !== null) document.getElementById('stat-volt').innerText = Number(data.volt) > 0 ? Number(data.volt).toFixed(2) + ' V' : 'not fitted';
         if (data.pcount !== undefined && data.pcount !== null) document.getElementById('stat-pkts').innerText = data.pcount;
 
         if (data.state_name) {
-            document.getElementById('flight-state-badge').innerText = data.state_name + ' (' + (data.state || 0) + ')';
+            document.getElementById('flight-state-badge').innerText = data.state_name;
         }
     }
 
@@ -5799,7 +5357,7 @@
         }
         if (telemetryMode === 'live') {
             document.getElementById('status-text').innerText =
-                (isConnected ? 'LIVE TELEMETRY' : 'LIVE HTTP') + (attitude.rateHz > 0.5 ? '' : ' (no data)');
+                attitude.rateHz > 0.5 ? (isConnected ? 'Live' : 'Live (HTTP)') : 'Connected, no data';
         }
     }
 
@@ -5836,15 +5394,16 @@
     // Telemetry Modes & Controls
     function setMode(mode) {
         telemetryMode = mode;
+        document.body.classList.toggle('sim-mode', mode === 'sim');
         document.getElementById('btn-mode-live').classList.toggle('active', mode === 'live');
         document.getElementById('btn-mode-sim').classList.toggle('active', mode === 'sim');
         if (mode === 'sim') {
             document.getElementById('status-dot').className = 'status-dot connected';
-            document.getElementById('status-text').innerText = 'MANUAL SIM';
+            document.getElementById('status-text').innerText = 'Manual';
         } else {
             testWaveActive = false;
             document.getElementById('btn-test-wave').classList.remove('active');
-            document.getElementById('status-text').innerText = isConnected ? 'LIVE TELEMETRY' : 'LIVE HTTP';
+            document.getElementById('status-text').innerText = isConnected ? 'Live' : 'Live (HTTP)';
         }
     }
 
@@ -5962,11 +5521,11 @@
         ctx.translate(0, pitchOffset);
 
         // Sky (Blue)
-        ctx.fillStyle = '#0284c7';
+        ctx.fillStyle = '#1E3A57';
         ctx.fillRect(-w, -h * 2, w * 2, h * 2);
 
         // Ground (Brown)
-        ctx.fillStyle = '#78350f';
+        ctx.fillStyle = '#4A3524';
         ctx.fillRect(-w, 0, w * 2, h * 2);
 
         // Horizon Line
@@ -5978,7 +5537,7 @@
         ctx.stroke();
 
         // Pitch ladder lines
-        ctx.font = '8px Consolas';
+        ctx.font = '9px "Plex Mono", Consolas';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         for (let p = -60; p <= 60; p += 10) {
@@ -5998,7 +5557,7 @@
         ctx.restore();
 
         // Fixed Crosshair / Aircraft Symbol
-        ctx.strokeStyle = '#facc15';
+        ctx.strokeStyle = '#E9A23B';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(cx, cy, 3, 0, Math.PI * 2);
@@ -6011,9 +5570,10 @@
     }
 
     function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        const c = document.getElementById('canvas-container');
+        camera.aspect = c.clientWidth / c.clientHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(c.clientWidth, c.clientHeight);
     }
 
     /// Attitude before operator tare / display options, at the current render instant

@@ -98,6 +98,24 @@ class CanSatHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     pass
                 return
 
+            elif path.startswith("/fonts/") or path.startswith("/icons/"):
+                # Bundled IBM Plex fonts and Lucide icon font (tools/assets), shared with the dock
+                sub, name = path.strip("/").split("/", 1)
+                asset = os.path.join(ASSETS_DIR, sub, os.path.basename(name))
+                if os.path.isfile(asset):
+                    try:
+                        with open(asset, "rb") as f:
+                            data = f.read()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "font/ttf")
+                        self.send_header("Cache-Control", "max-age=86400")
+                        self.send_header("Content-Length", str(len(data)))
+                        self.end_headers()
+                        self.wfile.write(data)
+                    except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                        pass
+                    return
+
             elif path.endswith(".glb") or "cansat_assembly.glb" in path:
                 glb_path = os.path.join(WEB_DIR, "cansat_assembly.glb")
                 if not os.path.exists(glb_path):

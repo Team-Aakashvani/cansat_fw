@@ -1,5 +1,35 @@
 # Changelog — CAN-7USAT 2026 Flight Software
 
+## v2.0.0 (2026-10-06) — Mission stack, flight recorder, new dock
+
+### Added
+- **Mission supervisor** for carrier drone or rocket: PAD → ASCENT → DESCENT → ARMS_DEPLOY (600 m)
+  → STEERING → LANDED, forward-only, resumes after an in-flight reset (RTC memory).
+- **Return-to-launch steering**: PI ground-velocity guidance (learns the wind) → attitude PID →
+  quad-X mixer → **DShot300** (RMT) for the HAKRC 35A 4-in-1 BLHeli_S; two LEDC arm-latch servos.
+- **Vertical Kalman filter** (3 states, float) with layered pressure-spike protection.
+- **Lift test** mode (`LIFT,<m>`): the whole sequence at building scale with the motors inhibited.
+- **Flight recorder**: 12 MB flash ring, 50 Hz records, mmap readout, download from the dock.
+- **Core dumps** to flash with a crash report in the dock.
+- **Bluetooth LE** health link (`AAKASHVANI-001`, Nordic UART); actuator commands refused.
+- **PSRAM** (8 MB octal) enabled; NimBLE moved there: ~130 KB internal heap free (was ~84 KB).
+- **RGB LED boot sequence** with the self-test result.
+- **Dock redesign** (IBM Plex, Lucide icons) with USB/Bluetooth, flight log, bench, firmware pages;
+  records `Flight_<TEAM_ID>.csv` for the judges. Redesigned browser 3D viewer.
+- Host unit tests (`tests/host/run_tests.py`); user manual (`docs/USER_MANUAL.pdf`).
+
+### Changed
+- Team number **001**; competition frame per guidelines §6: TEAM_ID string first, time since
+  power-on, acceleration, spin rate, state name, environment fields (23 fields).
+- **No radio transmission until `CX,ON`** (guidelines); USB/Bluetooth streams are unaffected.
+- IMU is the **BNO055** (fusion quaternion, mount auto-detection, gimbal-lock-free output).
+- Flash map for the 16 MB N16R8 (settings offsets unchanged).
+- The IMM is no longer in the flight path (kept in `components/nav` for reference).
+- Documentation rewritten to match the firmware.
+
+### Removed
+- OTA update instructions (OTA was never functional; single factory partition).
+
 ## v1.1.1 (2026-06-01) — Hardware Synchronization
 
 ### Added

@@ -20,7 +20,7 @@ namespace comms {
 
 class XBeeLink {
 public:
-    static constexpr size_t TX_BUF_LEN   = 256;
+    static constexpr size_t TX_BUF_LEN   = 384;
     static constexpr size_t RX_BUF_LEN   = 256;
     static constexpr int    TX_QUEUE_LEN  = 4;
 

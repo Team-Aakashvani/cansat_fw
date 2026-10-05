@@ -343,59 +343,184 @@ static constexpr ControlConfig CONTROL_CFG{};
 // GPIO pin mapping  (ESP32-S3 WROOM-1)
 // ===========================================================================
 
+// ESP32-S3-DevKitC-1 (N16R8). Reserved, never use: GPIO 19/20 (native USB),
+// 26-32 (SPI flash), 33-37 (octal PSRAM), 0/3/45/46 (strapping), 43/44 (UART0),
+// 48 (onboard WS2812 RGB LED).
 struct PinConfig {
-    // I2C Bus 0 & 1 (All I2C sensors share standard ESP32-S3 I2C pins)
+    // I2C bus (BNO055, BMP585, SHT4x, SGP41) - wired & verified
     int i2c0_sda = 38;
     int i2c0_scl = 39;
-
     int i2c1_sda = 38;
     int i2c1_scl = 39;
 
-    // SPI Bus (Shared — CC1101)
-    int spi_mosi = 23;
-    int spi_miso = 19;
-    int spi_sck  = 18;
-    int cc1101_cs = 5;  ///< RF scanner CS
-
-    // UART2 (XBee Pro Radio)
-    int xbee_tx  = 17;
-    int xbee_rx  = 16;
-
-    // UART1 (N-GS-01 NavIC GNSS)
+    // UART1 GNSS (N-GS-01 NavIC) - wired & verified (RX live on GPIO 13)
     int gnss_tx  = 21;
     int gnss_rx  = 13;
 
-    // SD card (SPI mode / fallback)
-    int sd_clk   = 14;
-    int sd_cmd   = 15;
-    int sd_d0    = 2;
-    int sd_d1    = 4;
-    int sd_d2    = 12;
-    int sd_d3    = 13;
+    // ---- Not yet wired: reserve these pins when integrating -----------------
+    // HAKRC 35A 4-in-1 ESC, DShot300 signal pads (M1 FL, M2 FR, M3 RR, M4 RL)
+    int motor[4] = {4, 5, 6, 7};
 
-    // PWM motors (LEDC channels 0-3)
-    int motor[4] = {25, 26, 32, 33};
+    // Two linear servos that unlatch the drone arms (50 Hz PWM)
+    int servo_a  = 15;
+    int servo_b  = 16;
 
-    // Servo release (LEDC channel 4)
-    int servo    = 4;
+    // UART2 XBee 3 Pro
+    int xbee_tx  = 17;
+    int xbee_rx  = 18;
 
-    // Recovery beacon
-    int beacon   = 12;
+    // SPI bus (SD card + CC1101) - keep spi_devices_fitted=false until wired
+    int spi_sck   = 12;
+    int spi_mosi  = 11;
+    int spi_miso  = 10;
+    int sd_cs     = 9;
+    int cc1101_cs = 14;
+    bool spi_devices_fitted = false;
 
-    // External power switch (active-high input)
-    int power_switch = 35;
+    // Legacy SDMMC fields used by SDLogger::init (mapped onto the SPI pins)
+    int sd_clk   = 12;
+    int sd_cmd   = 11;
+    int sd_d0    = 10;
 
-    // LED indicator
-    int led_status = 2;  ///< ESP32 onboard LED (GPIO 2)
+    // Recovery beacon / buzzer (active high)
+    int beacon   = 42;
+
+    // Battery voltage divider (ADC1_CH0), when fitted
+    int bat_adc  = 1;
 };
 static constexpr PinConfig PINS{};
+
+// ===========================================================================
+// Mission profile: carrier drone/rocket -> release at apogee -> passive chute
+// -> arms unlatched at 600 m -> motors vector thrust to steer the canopy back
+// to the launch site -> motors off near the ground -> landed.
+// ===========================================================================
+struct FlightProfileConfig {
+    // Launch (PAD -> ASCENT). Either path latches flight:
+    //   rocket : |f| >= launch_accel_mps2 for launch_accel_s, then confirmed by an
+    //            altitude gain >= launch_confirm_gain_m within launch_confirm_s
+    //   carrier: altitude gain >= launch_alt_gain_m while climbing >= launch_climb_mps
+    double launch_accel_mps2       = 29.4;  ///< 3 g (BNO055 clips at 4 g in fusion mode)
+    double launch_accel_s          = 0.05;
+    double launch_confirm_gain_m   = 10.0;
+    double launch_confirm_s        = 4.0;
+    double launch_alt_gain_m       = 25.0;
+    double launch_climb_mps        = 1.0;
+    double launch_climb_s          = 2.0;
+
+    // Release from the carrier (ASCENT -> DESCENT)
+    double release_drop_m          = 5.0;   ///< At least this far below the peak ...
+    double release_descent_mps     = 2.0;   ///< ... sinking at least this fast ...
+    double release_descent_s       = 1.0;   ///< ... for this long, plus release evidence:
+    double freefall_mps2           = 3.5;   ///< |f| below this == free fall (drop / ejection)
+    double freefall_s              = 0.12;
+    double shock_mps2              = 29.4;  ///< |f| above this near apogee == ejection / chute snatch
+    double release_evidence_s      = 8.0;   ///< Free fall / shock must be this recent
+    double release_fallback_mps    = 3.0;   ///< No evidence: need this descent rate ...
+    double release_fallback_s      = 3.0;   ///< ... for this long (a carrier sinking slowly never qualifies)
+
+    // Arm unlatch (DESCENT -> ARMS_DEPLOY)
+    double arms_deploy_alt_m       = 600.0; ///< AGL, on descent
+    double arms_min_after_release_s= 2.0;   ///< Clear of the carrier before unlatching
+    double arms_open_time_s        = 1.5;   ///< Servo travel + arms swinging out
+
+    // Steering enable (ARMS_DEPLOY -> STEERING)
+    double steer_max_tilt_deg      = 45.0;  ///< Attitude must be sane to start motors
+    double steer_max_rate_rps      = 4.0;
+    double steer_arm_timeout_s     = 10.0;  ///< Still unsafe after this: stay passive on the chute
+    double motor_cutoff_alt_m      = 10.0;  ///< Motors off below this AGL (people / props)
+
+    // Failsafes while steering
+    double tumble_tilt_deg         = 65.0;  ///< Motors off if tilted beyond this ...
+    double tumble_s                = 0.3;   ///< ... for this long
+    double recover_tilt_deg        = 30.0;  ///< Restart after tilt back below this ...
+    double recover_s               = 1.0;   ///< ... for this long
+
+    // Landed
+    double landed_alt_m            = 5.0;
+    double landed_speed_mps        = 0.6;
+    double landed_s                = 2.0;
+};
+static constexpr FlightProfileConfig PROFILE_CFG{};
+
+// ===========================================================================
+// Vertical channel filter (altitude, vertical speed, accel bias), float
+// ===========================================================================
+struct VerticalConfig {
+    // Process noise (accel input noise, m/s^2) per mission phase
+    float sigma_a_pad      = 0.3f;
+    float sigma_a_ascent   = 4.0f;
+    float sigma_a_descent  = 2.0f;
+    float sigma_a_steering = 3.0f;
+    float sigma_a_clipped  = 60.0f;   ///< Accel saturated (true accel unknown, >= 4 g): baro leads
+    float sigma_bias       = 0.02f;   ///< Accel bias random walk (m/s^2 / sqrt(s))
+
+    // Baro measurement noise (m, 1 sigma); inflated under prop wash
+    float baro_sigma_m          = 0.35f;
+    float baro_sigma_steering_m = 1.2f;
+    float baro_gate_chi2        = 13.8f;  ///< 1-dof, 99.98 %
+    float baro_max_rate_mps     = 120.0f; ///< Faster than this is physically impossible
+    float resync_after_s        = 0.5f;   ///< Rejected this long with smooth (non-erratic) data -> re-sync
+
+    // GNSS altitude (weak aiding)
+    float gnss_alt_sigma_m      = 6.0f;
+    float gnss_gate_chi2        = 10.8f;
+    int   gnss_min_sats         = 5;
+
+    float accel_clip_mps2       = 37.0f;  ///< |any axis| above this == BNO055 4 g clipping
+};
+static constexpr VerticalConfig VERT_CFG{};
+
+// ===========================================================================
+// Return-to-launch guidance (thrust vectoring under the canopy)
+// ===========================================================================
+struct GuidanceConfig {
+    float site_avg_s        = 10.0f;  ///< Average GNSS on the pad this long for the launch site
+    int   site_min_sats     = 5;
+    float k_pos             = 0.08f;  ///< Desired ground speed per metre of distance (1/s)
+    float v_max_mps         = 5.0f;   ///< Max commanded ground speed toward the site
+    float k_vel             = 0.6f;   ///< Accel command per m/s of velocity error (1/s)
+    float k_vel_i           = 0.10f;  ///< Integral of velocity error (learns the wind) (1/s^2)
+    float a_max_mps2        = 4.0f;
+    float max_tilt_deg      = 25.0f;
+    float arrive_radius_m   = 8.0f;   ///< Inside this: no tilt command
+    float gnss_timeout_s    = 3.0f;   ///< No fresh fix: level the vehicle
+};
+static constexpr GuidanceConfig GUIDE_CFG{};
+
+// ===========================================================================
+// Actuators
+// ===========================================================================
+struct ActuatorConfig {
+    // Linear servos (arm latches)
+    uint32_t servo_lock_us      = 1000;
+    uint32_t servo_unlatch_us   = 2000;
+
+    // DShot300 motor output (BLHeli_S). Normalised throttle 0..1 -> DShot 48..2047
+    float    idle_throttle      = 0.06f;  ///< Spinning, negligible thrust
+    float    base_throttle      = 0.35f;  ///< Collective while steering
+    float    max_throttle       = 0.80f;
+    float    spinup_s           = 1.5f;   ///< Idle -> base ramp
+    float    arm_zero_s         = 0.6f;   ///< DShot 0-throttle frames before spinning (ESC arming)
+
+    // Attitude cascade (angle -> rate -> differential throttle)
+    float kp_angle     = 4.0f;    ///< rad/s per rad
+    float ki_angle     = 1.5f;    ///< rad/s per rad*s (removes the canopy pendulum's steady tilt error)
+    float kp_rate      = 0.12f;   ///< throttle per rad/s
+    float ki_rate      = 0.05f;
+    float kd_rate      = 0.002f;
+    float kp_yaw_rate  = 0.08f;   ///< Yaw-rate damping (stops canopy-induced spin)
+    float max_rate_rps = 2.5f;
+    float max_torque   = 0.25f;   ///< Differential throttle authority
+};
+static constexpr ActuatorConfig ACT_CFG{};
 
 // ===========================================================================
 // Telemetry configuration  (CAN-7USAT format compliance)
 // ===========================================================================
 
 struct TelemetryConfig {
-    uint16_t team_id             = 1234;     ///< REPLACE with actual team ID
+    uint16_t team_id             = 1;        ///< Team 001 (printed zero-padded as "001")
     uint32_t xbee_baud           = 115200;
     uint8_t  xbee_pan_id         = 0x12;     ///< Set to Team ID lower byte per guidelines
 
@@ -408,6 +533,9 @@ struct TelemetryConfig {
     uint8_t  cmd_max_retries     = 3;
 };
 static constexpr TelemetryConfig TELEM_CFG{};
+
+/// TEAM_ID field of the telemetry frame (guidelines: 2026-IN-SPACeCAN-7USAT-XXX)
+inline constexpr const char TEAM_ID_STR[] = "2026-IN-SPACeCAN-7USAT-001";
 
 // ===========================================================================
 // Logging configuration

@@ -43,8 +43,7 @@ bool XBeeLink::enqueue_packet(const char* csv, size_t len) noexcept {
     
     // 1. Build the base string: <TEAM_ID>,<PAYLOAD>
     char base[TX_BUF_LEN];
-    int n = snprintf(base, sizeof(base), "%u,%s", 
-                     (unsigned)nav::TELEM_CFG.team_id, csv);
+    int n = snprintf(base, sizeof(base), "%s", csv);   // frame already starts with TEAM_ID
     if (n < 0 || (size_t)n >= sizeof(base)) return false;
 
     // 2. Calculate CRC of the base string
@@ -164,7 +163,7 @@ bool XBeeLink::parse_uplink(const uint8_t* buf, size_t len,
 
     // Optional team_id check
     unsigned team_id = 0;
-    if (sscanf(tok, "%u", &team_id) == 1 && (team_id == (unsigned)nav::TELEM_CFG.team_id || team_id == 0 || team_id == 1234)) {
+    if (sscanf(tok, "%u", &team_id) == 1 && (team_id == (unsigned)nav::TELEM_CFG.team_id || team_id == 0)) {
         tok = strtok_r(nullptr, ", ", &saveptr);
         if (!tok) return false;
     }
@@ -182,6 +181,9 @@ bool XBeeLink::parse_uplink(const uint8_t* buf, size_t len,
     else if (strcasecmp(tok, "MAP")   == 0) out.type = CommandType::MAP;
     else if (strcasecmp(tok, "OTA")   == 0) out.type = CommandType::OTA;
     else if (strcasecmp(tok, "TARE")  == 0) out.type = CommandType::TARE;
+    else if (strcasecmp(tok, "NORTH") == 0) out.type = CommandType::NORTH;
+    else if (strcasecmp(tok, "LIFT")  == 0) out.type = CommandType::LIFT;
+    else if (strcasecmp(tok, "LOG")   == 0) out.type = CommandType::LOG;
     else return false;
 
     tok = strtok_r(nullptr, "\r\n", &saveptr);

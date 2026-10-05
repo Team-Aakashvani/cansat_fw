@@ -1,0 +1,9 @@
+Bundled third-party assets used by tools/aakashvani_dock.py
+
+fonts/IBMPlexSans-*.ttf, fonts/IBMPlexMono-*.ttf
+  IBM Plex - Copyright IBM Corp. - SIL Open Font License 1.1
+  https://github.com/IBM/plex
+
+icons/lucide.ttf, icons/info.json
+  Lucide icons (lucide-static 0.460.0) - ISC License
+  https://lucide.dev

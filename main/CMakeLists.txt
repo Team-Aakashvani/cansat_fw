@@ -28,6 +28,8 @@ idf_component_register(
         spi_flash
         driver
         esp_driver_usb_serial_jtag
+        espcoredump
+        esp_partition
         sdmmc
         fatfs
         log

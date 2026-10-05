@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "src/xbee_link.cpp"
         "src/command_parser.cpp"
+        "src/ble_link.cpp"
     INCLUDE_DIRS
         "include"
     REQUIRES
@@ -14,4 +15,5 @@ idf_component_register(
         log
         freertos
         esp_timer
+        bt
 )

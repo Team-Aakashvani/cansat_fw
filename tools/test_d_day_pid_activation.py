@@ -1,4 +1,7 @@
 import serial, time, math, sys
+# Competition frame: field 19 is the state name; map it to the SOFTWARE_STATE code
+STATE_CODE = {"BOOT": 0, "PAD": 2, "ASCENT": 3, "DESCENT": 4, "ARMS_DEPLOY": 5, "STEERING": 6, "LANDED": 7}
+
 
 PORT = 'COM13'
 BAUD = 115200
@@ -24,8 +27,8 @@ def run():
         time.sleep(0.08)
 
     print('\n[+] Step 1: Launch Pad Prep - Enabling Sim Mode and Tare Zero Altitude...')
-    send_cmd('CMD,1234,SIM,ENABLE')
-    send_cmd('CMD,1234,CAL')
+    send_cmd('CMD,001,SIM,ENABLE')
+    send_cmd('CMD,001,CAL')
     time.sleep(0.5)
 
     t_points, alt_points = [], []
@@ -53,15 +56,15 @@ def run():
 
     for t_s, alt_m in zip(t_points, alt_points):
         p_sim = p0 * ((1.0 - 2.25577e-5 * alt_m) ** 5.25588)
-        send_cmd('CMD,1234,SIMP,' + str(round(p_sim, 1)))
+        send_cmd('CMD,001,SIMP,' + str(round(p_sim, 1)))
 
         while ser.in_waiting > 0:
             line = ser.readline().decode('utf-8', errors='replace').strip()
-            if line.startswith('1234,'):
+            if line.startswith('2026-IN-SPACeCAN-7USAT-001,'):
                 parts = line.split(',')
-                if len(parts) >= 16:
+                if len(parts) >= 19:
                     pkt_alt = float(parts[3])
-                    state_code = int(parts[15])
+                    state_code = STATE_CODE.get(parts[18].replace("LIFT-", ""), 0)
                     state_names = {0: 'IDLE', 1: 'STANDBY', 2: 'LAUNCH_PAD', 3: 'ASCENT', 4: 'PARACHUTE', 6: 'DRONE_HOVER', 7: 'LANDED'}
                     name = state_names.get(state_code, 'STATE_' + str(state_code))
                     pid_status = 'LOCKED OFF (0% PWM)'
@@ -77,7 +80,7 @@ def run():
 
         time.sleep(0.05)
 
-    send_cmd('CMD,1234,SIM,DISABLE')
+    send_cmd('CMD,001,SIM,DISABLE')
     ser.close()
     print('=' * 79)
     print(' D-DAY FLIGHT SIMULATION CERTIFICATION:')

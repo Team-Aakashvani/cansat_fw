@@ -4,7 +4,7 @@ CONFIRMED & LOCKED WIRING SPECIFICATION
 ================================================================================
 Timestamp: 2026-10-04 | Status: VERIFIED & LOCKED ON HARDWARE BENCH
 Host Microcontroller: ESP32-S3-DevKitC-1 (N16R8, 16MB Flash, 8MB Octal PSRAM)
-Serial Port: COM14 (115200 baud, 8-N-1)
+Serial Port: native USB-Serial-JTAG (COM15 on this PC), console + commands
 
 --------------------------------------------------------------------------------
 1. SHARED I2C SENSOR BUS ARCHITECTURE
@@ -16,8 +16,8 @@ Bus Configuration:
   • Microcontroller Port: I2C_NUM_0
   • SDA Pin:              GPIO 38 (Internal Pull-Up Enabled + Sensor Board Pull-Ups)
   • SCL Pin:              GPIO 39 (Internal Pull-Up Enabled + Sensor Board Pull-Ups)
-  • Clock Frequency:      25 kHz (Slow, highly stable rate immune to cable capacitance
-                          and multi-drop fly-wire ringing)
+  • Clock Frequency:      100 kHz (verified stable on this bench; 25 kHz limited the
+                          IMU to ~25 Hz)
 
 Common Power Rails:
   • 3.3V (VCC / VIN):     Pin labeled "3V3" on ESP32-S3-DevKitC-1
@@ -96,23 +96,27 @@ Function                  ESP32-S3 GPIO     Direction / Protocol
 Shared I2C SDA            GPIO 38           Bidirectional (OD)
 Shared I2C SCL            GPIO 39           Output / Open Drain (OD)
 
-GNSS / GPS TX             GPIO 27           ESP32 TX -> GNSS RX (Auto-Baud 9600)
-GNSS / GPS RX             GPIO 13           ESP32 RX <- GNSS TX (NMEA stream)
+GNSS / GPS TX             GPIO 21           ESP32 TX -> GNSS RX (GPIO 27 is SPI flash on N16R8)
+GNSS / GPS RX             GPIO 13           ESP32 RX <- GNSS TX (NMEA stream)    [verified]
 
+--- Reserved, NOT YET WIRED (firmware is already configured for these pins) ---
 Telemetry XBee TX         GPIO 17           ESP32 TX -> XBee DIN (115200 baud)
 Telemetry XBee RX         GPIO 18           ESP32 RX <- XBee DOUT (115200 baud)
 
 SPI SCK (SD / CC1101)     GPIO 12           SPI Clock
-SPI MISO                  GPIO 13           SPI Master In Slave Out
+SPI MISO                  GPIO 10           (was 13 = GNSS RX conflict)
 SPI MOSI                  GPIO 11           SPI Master Out Slave In
 SD Card CS                GPIO 9            Chip Select (Active LOW)
-CC1101 Radio CS           GPIO 10           Chip Select (Active LOW)
+CC1101 Radio CS           GPIO 14           Chip Select (Active LOW)
+  -> set PINS.spi_devices_fitted = true in nav/config.hpp once fitted
 
-Motor 1 (Front-Left)      GPIO 4            PWM / ESC (1000-2000 µs)
-Motor 2 (Front-Right)     GPIO 5            PWM / ESC (1000-2000 µs)
-Motor 3 (Rear-Right)      GPIO 6            PWM / ESC (1000-2000 µs)
-Motor 4 (Rear-Left)       GPIO 7            PWM / ESC (1000-2000 µs)
-Parachute Release Servo   GPIO 15           Servo PWM (1000µs Lock / 2000µs Deploy)
+ESC M1 (Front-Left)       GPIO 4            DShot300 (HAKRC 35A 4-in-1, BLHeli_S)
+ESC M2 (Front-Right)      GPIO 5            DShot300
+ESC M3 (Rear-Right)       GPIO 6            DShot300
+ESC M4 (Rear-Left)        GPIO 7            DShot300
+Arm-latch Servo A         GPIO 15           50 Hz PWM (1000 us lock / 2000 us unlatch)
+Arm-latch Servo B         GPIO 16           50 Hz PWM
+Recovery Buzzer           GPIO 42           Active high
 
 Battery Voltage / Current GPIO 1            ADC / INA260 Monitor
 
@@ -145,17 +149,19 @@ D. SGP41 Gas Index Models:
 5. LIVE TELEMETRY PACKET STRUCTURES
 --------------------------------------------------------------------------------
 
-1. High-Rate Flight Telemetry (10 Hz USB Console / 1 Hz Radio & SD):
-   Format:
-   TEAM_ID,MISSION_TIME,PKT_COUNT,ALT,PRES,TEMP,VOLT,GNSS_TIME,LAT,LON,GNSS_ALT,SATS,PITCH,ROLL,YAW,STATE,FREQ,RSSI
+1. Competition Frame (25 Hz USB / 1 Hz Bluetooth / 1 Hz Radio after CX,ON):
+   Format (full definition: docs/TELEMETRY_FORMAT.md):
+   TEAM_ID,TIME_STAMPING_S,PACKET_COUNT,ALTITUDE_M,PRESSURE_PA,TEMP_C,VOLTAGE_V,GNSS_TIME_S,
+   GNSS_LATITUDE,GNSS_LONGITUDE,GNSS_ALTITUDE_M,GNSS_SATS,ACC_X_MPS2,ACC_Y_MPS2,ACC_Z_MPS2,
+   ROLL_DEG,PITCH_DEG,GYRO_SPIN_RATE_DPS,FLIGHT_SOFTWARE_STATE,HEADING_DEG,HUMIDITY_PCT,VOC_INDEX,NOX_INDEX
    Example:
-   1234,00:00:15,152,0.01,100983.2,32.3,7.40,00:00:00,0.000000,0.000000,0.00,0,17.00,-6.00,359.94,2,433.0,-128
+   2026-IN-SPACeCAN-7USAT-001,15.2,381,0.0,100983,32.3,0.00,0,0.000000,0.000000,0.0,0,0.12,-0.31,9.78,1.2,-0.8,0.3,PAD,182.0,52.4,100,1
 
 2. Environmental Telemetry (1 Hz Clean Engineering Packet):
    Format:
-   1234,ENV,TEMPERATURE_C,HUMIDITY_PCT,VOC_INDEX,NOX_INDEX
+   001,ENV,TEMPERATURE_C,HUMIDITY_PCT,VOC_INDEX,NOX_INDEX
    Example:
-   1234,ENV,32.47,52.4,100,1
+   001,ENV,32.47,52.4,100,1
 
 ================================================================================
 END OF FILE — SYSTEM BENCH POSITION LOCKED

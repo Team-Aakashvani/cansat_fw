@@ -120,6 +120,20 @@ void CommandParser::dispatch(const UplinkCommand& cmd) noexcept {
         if (ota_handler_) ota_handler_(cmd.arg);
         break;
     }
+    case CommandType::LOG: {
+        if (log_handler_) log_handler_(cmd.arg);
+        break;
+    }
+    case CommandType::LIFT: {
+        ESP_LOGI(TAG, "LIFT → '%s'", cmd.arg);
+        if (lift_handler_) lift_handler_(cmd.arg);
+        break;
+    }
+    case CommandType::NORTH: {
+        ESP_LOGI(TAG, "NORTH → heading calibration");
+        if (north_handler_) north_handler_();
+        break;
+    }
     case CommandType::TARE: {
         ESP_LOGI(TAG, "TARE → re-identify IMU mount and re-reference attitude");
         if (tare_handler_) tare_handler_();

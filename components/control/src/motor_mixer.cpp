@@ -47,7 +47,7 @@ esp_err_t MotorMixer::init() noexcept {
 
     // Servo channel (Timer 1, 50Hz, neutral 1500us)
     ledc_channel_config_t srv{};
-    srv.gpio_num   = P.servo;
+    srv.gpio_num   = P.servo_a;
     srv.speed_mode = LEDC_LOW_SPEED_MODE;
     srv.channel    = (ledc_channel_t)SERVO_CH;
     srv.timer_sel  = LEDC_TIMER_1;

@@ -232,6 +232,10 @@ IMUData BNO085::read_bno055() noexcept {
         data.quat_x          = att.q_rel.x;
         data.quat_y          = att.q_rel.y;
         data.quat_z          = att.q_rel.z;
+        data.qw_world        = att.q_world.w;
+        data.qx_world        = att.q_world.x;
+        data.qy_world        = att.q_world.y;
+        data.qz_world        = att.q_world.z;
         data.mount           = att.mount;
         data.euler_valid     = true;
         data.quat_valid      = true;

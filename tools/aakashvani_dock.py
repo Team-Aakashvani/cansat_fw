@@ -1,1643 +1,1457 @@
 """
-AAKASHVANI - Mission Control & Flasher Dock
-============================================
-All-in-One GUI for:
-1. ESP32 Flashing & Chip Identification (esptool)
-2. Ground Station (GCS) Telemetry Live Visualizer & Telecommand Uplink
-3. Flight Computer (FC) Diagnostics & Sensor Reaction Monitor
-4. Sensorless Bench Testing & Hardware-In-The-Loop (HIL) Simulation
-5. Universal Interactive Serial Terminal
+Aakashvani Ground Station
+=========================
+
+Ground software for the CAN-7USAT flight computer.
+
+  Links      USB (native USB-Serial-JTAG) or Bluetooth LE (pad / recovery health link)
+  Overview   mission phase, altitude, return-to-launch status, events
+  Attitude   live orientation, 3D viewer, re-reference / north calibration
+  Health     sensors, power, flight-log storage, self-test, crash dumps
+  Flight log download / erase the on-board 12 MB flight recorder
+  Bench      ground calibration, lift test, simulated flight, actuator tests
+  Console    raw line console
+  Firmware   flash builds from build/ with esptool
+
+Fonts: IBM Plex Sans / Plex Mono (SIL OFL), icons: Lucide (ISC) - see tools/assets.
 """
 
-import sys
-import os
-import time
+import csv
+import ctypes
 import json
-import threading
+import math
+import os
 import queue
 import re
-from datetime import datetime
+import subprocess
+import sys
+import threading
+import time
 from collections import deque
-import math
+from datetime import datetime
 
 import serial
 import serial.tools.list_ports
-import subprocess
-
-try:
-    import telemetry_3d_server
-except ImportError:
-    telemetry_3d_server = None
-
-try:
-    import customtkinter as ctk
-    ctk.set_appearance_mode("Dark")
-    ctk.set_default_color_theme("blue")
-except ImportError:
-    import tkinter as ctk
-
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import filedialog, messagebox
+from PIL import Image, ImageDraw, ImageFont
 
 try:
     import matplotlib
     matplotlib.use("TkAgg")
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
-    import matplotlib.pyplot as plt
-    MATPLOTLIB_AVAILABLE = True
-except ImportError:
-    MATPLOTLIB_AVAILABLE = False
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    HAVE_MPL = True
+except Exception:
+    HAVE_MPL = False
+
+try:
+    import telemetry_3d_server
+except Exception:
+    telemetry_3d_server = None
+
+TOOLS = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(TOOLS)
+ASSETS = os.path.join(TOOLS, "assets")
+SETTINGS_FILE = os.path.join(os.path.expanduser("~"), ".aakashvani_dock.json")
+TEAM = "001"
+TEAM_ID = "2026-IN-SPACeCAN-7USAT-001"          # TEAM_ID field of the competition frame
+FRAME_HEADER = ("TEAM_ID,TIME_STAMPING_S,PACKET_COUNT,ALTITUDE_M,PRESSURE_PA,TEMP_C,VOLTAGE_V,"
+                "GNSS_TIME_S,GNSS_LATITUDE,GNSS_LONGITUDE,GNSS_ALTITUDE_M,GNSS_SATS,"
+                "ACC_X_MPS2,ACC_Y_MPS2,ACC_Z_MPS2,ROLL_DEG,PITCH_DEG,GYRO_SPIN_RATE_DPS,"
+                "FLIGHT_SOFTWARE_STATE,HEADING_DEG,HUMIDITY_PCT,VOC_INDEX,NOX_INDEX")
+DEFAULT_TM_DIR = os.path.join(os.path.expanduser("~"), "Documents", "Aakashvani")
 
 # =============================================================================
+# Look & feel
+# =============================================================================
+C = {
+    "bg":      "#0E1116",
+    "panel":   "#151920",
+    "raised":  "#1B2028",
+    "hover":   "#232933",
+    "line":    "#262C35",
+    "text":    "#E4E7EB",
+    "muted":   "#8B95A3",
+    "faint":   "#5A6370",
+    "accent":  "#E9A23B",     # one accent: amber, used sparingly
+    "ok":      "#3FB27F",
+    "warn":    "#E9A23B",
+    "bad":     "#E5484D",
+    "info":    "#5B9DF0",
+}
 
-# CONSTANTS & PROTOCOL SPECS
+SANS, SANS_MED, SANS_SEMI, MONO, MONO_MED = "Segoe UI", "Segoe UI", "Segoe UI Semibold", "Consolas", "Consolas"
+
+
+def load_fonts():
+    """Register the bundled fonts for this process only (no system install)."""
+    global SANS, SANS_MED, SANS_SEMI, MONO, MONO_MED
+    if os.name != "nt":
+        return
+    try:
+        for sub in ("fonts", "icons"):
+            d = os.path.join(ASSETS, sub)
+            for f in os.listdir(d):
+                if f.endswith(".ttf"):
+                    ctypes.windll.gdi32.AddFontResourceExW(os.path.join(d, f), 0x10, 0)
+        SANS, SANS_MED, SANS_SEMI = "IBM Plex Sans", "IBM Plex Sans Medm", "IBM Plex Sans SmBld"
+        MONO, MONO_MED = "IBM Plex Mono", "IBM Plex Mono Medium"
+    except Exception:
+        pass
+    if HAVE_MPL:                                   # matplotlib has its own font registry
+        try:
+            from matplotlib import font_manager
+            for f in os.listdir(os.path.join(ASSETS, "fonts")):
+                font_manager.fontManager.addfont(os.path.join(ASSETS, "fonts", f))
+            matplotlib.rcParams["font.family"] = "IBM Plex Sans"
+        except Exception:
+            pass
+
+
+def font(size=12, kind="sans"):
+    family = {"sans": SANS, "med": SANS_MED, "semi": SANS_SEMI, "mono": MONO, "monomed": MONO_MED}[kind]
+    return ctk.CTkFont(family=family, size=size)
+
+
+# Lucide codepoints (tools/assets/icons/info.json)
+ICONS = {
+    "overview": 0xe0f8, "attitude": 0xe2ea, "health": 0xe372, "log": 0xe0b1, "bench": 0xe158,
+    "console": 0xe185, "firmware": 0xe0ad, "usb": 0xe35a, "ble": 0xe060, "ble_on": 0xe1b8,
+    "plug": 0xe383, "refresh": 0xe149, "download": 0xe0b6, "upload": 0xe19e, "trash": 0xe18e,
+    "check": 0xe226, "alert": 0xe193, "x": 0xe088, "play": 0xe140, "stop": 0xe16b, "send": 0xe156,
+    "compass": 0xe09f, "crosshair": 0xe0b0, "box": 0xe065, "mountain": 0xe231, "rocket": 0xe286,
+    "satellite": 0xe44c, "battery": 0xe057, "thermo": 0xe186, "cpu": 0xe0ad, "drive": 0xe0f0,
+    "activity": 0xe038, "gauge": 0xe1bf, "lock_open": 0xe110, "zap": 0xe1b4, "wind": 0xe1b0,
+    "nav": 0xe127, "list": 0xe10c, "radio": 0xe146, "flag": 0xe0d6, "layers": 0xe104,
+}
+_icon_cache = {}
+
+
+def icon(name, size=16, color=None):
+    color = color or C["muted"]
+    key = (name, size, color)
+    if key not in _icon_cache:
+        path = os.path.join(ASSETS, "icons", "lucide.ttf")
+        img = Image.new("RGBA", (size * 2, size * 2), (0, 0, 0, 0))
+        try:
+            f = ImageFont.truetype(path, int(size * 1.7))
+            d = ImageDraw.Draw(img)
+            ch = chr(ICONS[name])
+            b = d.textbbox((0, 0), ch, font=f)
+            d.text(((size * 2 - (b[2] - b[0])) / 2 - b[0], (size * 2 - (b[3] - b[1])) / 2 - b[1]), ch, font=f, fill=color)
+        except Exception:
+            pass
+        _icon_cache[key] = ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
+    return _icon_cache[key]
+
 
 # =============================================================================
-
-STATE_NAMES = {
-0: ("IDLE", "#7f8c8d"),
-1: ("STANDBY", "#3498db"),
-2: ("LAUNCH_PAD", "#3498db"),
-3: ("ASCENT", "#e67e22"),
-4: ("PARACHUTE", "#2ecc71"),
-5: ("BURNOUT", "#9b59b6"),
-6: ("DRONE_HOVER", "#1abc9c"),
-7: ("LANDED", "#e74c3c")
-}
-
-TELEMETRY_FIELDS = [
-"team_id", "mission_time", "packet_count", "altitude", "pressure",
-"temperature", "voltage", "gnss_time", "latitude", "longitude",
-"gnss_alt", "sats", "pitch", "roll", "yaw", "software_state", "freq", "rssi"
-]
-
-def wrap_diff_180(val, base):
-    """Calculates shortest angular difference (val - base) mapped to [-180, +180]."""
-    return ((val - base + 180.0) % 360.0) - 180.0
-
-MOUNT_NAMES = {
-    0: "Not referenced",
-    1: "PARALLEL (Z up)",
-    2: "PARALLEL (Z down)",
-    3: "PERPENDICULAR (X up)",
-    4: "PERPENDICULAR (X down)",
-    5: "PERPENDICULAR (Y up)",
-    6: "PERPENDICULAR (Y down)",
-}
-
-Q_IDENTITY = (1.0, 0.0, 0.0, 0.0)
+# Protocol
+# =============================================================================
+PHASES = ["PAD", "ASCENT", "DESCENT", "ARMS_DEPLOY", "STEERING", "LANDED"]
+PHASE_LABEL = {"PAD": "Pad", "ASCENT": "Ascent", "DESCENT": "Descent", "ARMS_DEPLOY": "Arms out",
+               "STEERING": "Steering", "LANDED": "Landed"}
+STATE_CODE = {2: "PAD", 3: "ASCENT", 4: "DESCENT", 5: "ARMS_DEPLOY", 6: "STEERING", 7: "LANDED"}
+ESC_STATE = {0: "silent", 1: "arming", 2: "spin-up", 3: "running", 4: "stopped"}
+MOUNTS = {0: "not referenced", 1: "parallel, Z up", 2: "parallel, Z down", 3: "perpendicular, X up",
+          4: "perpendicular, X down", 5: "perpendicular, Y up", 6: "perpendicular, Y down"}
+BIT_NAMES = {0: "IMU absent", 1: "baro absent", 2: "power monitor absent", 3: "GNSS silent",
+             4: "radio absent", 5: "SD card", 6: "NVS", 7: "IMU implausible", 8: "baro implausible",
+             9: "battery low"}
+BLE_BLOCKED = ("MTR", "MOTOR", "PID", "CHUTE", "OTA", "LOG,DUMP", "LOG,ERASE")
 
 
 def quat_mul(a, b):
     aw, ax, ay, az = a
     bw, bx, by, bz = b
-    return (aw * bw - ax * bx - ay * by - az * bz,
-            aw * bx + ax * bw + ay * bz - az * by,
-            aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw)
-
-
-def quat_conj(q):
-    return (q[0], -q[1], -q[2], -q[3])
-
-
-def quat_from_zxy(p_deg, r_deg, y_deg):
-    """Three.js 'ZXY' Euler (tilt_x, tilt_y, heading) -> quaternion: Rz(y) Rx(p) Ry(r)."""
-    hp, hr, hy = math.radians(p_deg) / 2, math.radians(r_deg) / 2, math.radians(y_deg) / 2
-    qz = (math.cos(hy), 0.0, 0.0, math.sin(hy))
-    qx = (math.cos(hp), math.sin(hp), 0.0, 0.0)
-    qy = (math.cos(hr), 0.0, math.sin(hr), 0.0)
-    return quat_mul(quat_mul(qz, qx), qy)
+    return (aw * bw - ax * bx - ay * by - az * bz, aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw)
 
 
 def euler_zxy(q):
-    """Quaternion -> ZXY Euler degrees (tilt_x [-90,90], tilt_y (-180,180], heading [0,360))."""
     w, x, y, z = q
-    m32 = max(-1.0, min(1.0, 2.0 * (y * z + w * x)))
-    p = math.degrees(math.asin(m32))
-    if abs(m32) < 0.999999999:
+    m = max(-1.0, min(1.0, 2.0 * (y * z + w * x)))
+    p = math.degrees(math.asin(m))
+    if abs(m) < 0.999999999:
         r = math.degrees(math.atan2(-2.0 * (x * z - w * y), 1.0 - 2.0 * (x * x + y * y)))
-        yaw = math.degrees(math.atan2(-2.0 * (x * y - w * z), 1.0 - 2.0 * (x * x + z * z)))
-    else:  # gimbal lock: only yaw +/- roll observable; report it all as heading
+        yw = math.degrees(math.atan2(-2.0 * (x * y - w * z), 1.0 - 2.0 * (x * x + z * z)))
+    else:
         r = 0.0
-        yaw = math.degrees(math.atan2(2.0 * (x * y + w * z), 1.0 - 2.0 * (y * y + z * z)))
-    yaw %= 360.0
-    if yaw >= 359.995:
-        yaw = 0.0
-    return p, r, yaw
+        yw = math.degrees(math.atan2(2.0 * (x * y + w * z), 1.0 - 2.0 * (y * y + z * z)))
+    yw %= 360.0
+    return p, r, (0.0 if yw >= 359.995 else yw)
 
 
-def apply_tare(q_tare, q):
-    """Operator zero as a quaternion (world-frame left multiply); never Euler subtraction,
-    which is wrong for any combined rotation and breaks near +/-90 deg."""
-    return quat_mul(q_tare, q)
+# =============================================================================
+# Links
+# =============================================================================
+class SerialLink:
+    kind = "usb"
+
+    def __init__(self, port, on_line, on_status):
+        self.port, self.on_line, self.on_status = port, on_line, on_status
+        self.ser = None
+        self._stop = threading.Event()
+
+    def start(self):
+        s = serial.Serial()
+        s.port, s.baudrate, s.timeout, s.write_timeout = self.port, 115200, 0.1, 1.0
+        s.dtr = False
+        s.rts = False          # never reset the board when connecting
+        s.open()
+        self.ser = s
+        threading.Thread(target=self._run, daemon=True).start()
+        self.on_status("connected", f"USB {self.port}")
+
+    def _run(self):
+        buf = b""
+        while not self._stop.is_set():
+            try:
+                buf += self.ser.read(4096)
+            except Exception:
+                self.on_status("lost", "USB disconnected")
+                return
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                self.on_line(line.decode("utf-8", "replace").strip())
+
+    def send(self, text):
+        try:
+            self.ser.write((text.strip() + "\r\n").encode())
+            return True
+        except Exception:
+            return False
+
+    def stop(self):
+        self._stop.set()
+        try:
+            self.ser.close()
+        except Exception:
+            pass
 
 
-    # =============================================================================
+class BleLink:
+    kind = "ble"
+    RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+    TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
-    # MAIN DOCK APPLICATION CLASS
+    def __init__(self, on_line, on_status, prefix="AAKASHVANI"):
+        self.on_line, self.on_status, self.prefix = on_line, on_status, prefix
+        self.loop = None
+        self.client = None
+        self._stop = threading.Event()
+        self._buf = bytearray()
 
-    # =============================================================================
+    def start(self):
+        threading.Thread(target=self._thread, daemon=True).start()
 
-class AakashvaniDock(ctk.CTk if hasattr(ctk, 'CTk') else tk.Tk):
+    def _thread(self):
+        import asyncio
+        self.loop = asyncio.new_event_loop()
+        try:
+            self.loop.run_until_complete(self._main())
+        except Exception as e:
+            self.on_status("lost", f"Bluetooth: {e}")
+
+    async def _main(self):
+        import asyncio
+        from bleak import BleakScanner, BleakClient
+        self.on_status("busy", "Searching for the CanSat...")
+        dev = await BleakScanner.find_device_by_filter(
+            lambda d, ad: (d.name or ad.local_name or "").startswith(self.prefix), timeout=12)
+        if dev is None:
+            self.on_status("lost", "No CanSat found over Bluetooth")
+            return
+        self.on_status("busy", f"Connecting to {dev.name}...")
+        async with BleakClient(dev, disconnected_callback=lambda _: self.on_status("lost", "Bluetooth link lost")) as c:
+            self.client = c
+            await c.start_notify(self.TX, self._notify)
+            self.on_status("connected", f"Bluetooth {dev.name}")
+            while not self._stop.is_set() and c.is_connected:
+                await asyncio.sleep(0.2)
+
+    def _notify(self, _, data):
+        self._buf.extend(data)
+        while b"\n" in self._buf:
+            i = self._buf.index(b"\n")
+            self.on_line(self._buf[:i].decode("utf-8", "replace").strip())
+            del self._buf[:i + 1]
+
+    def send(self, text):
+        import asyncio
+        if not (self.loop and self.client):
+            return False
+
+        async def write():
+            data = (text.strip() + "\n").encode()
+            for i in range(0, len(data), 180):
+                await self.client.write_gatt_char(self.RX, data[i:i + 180], response=False)
+        asyncio.run_coroutine_threadsafe(write(), self.loop)
+        return True
+
+    def stop(self):
+        self._stop.set()
+
+
+# =============================================================================
+# Widgets
+# =============================================================================
+class Card(ctk.CTkFrame):
+    def __init__(self, master, title=None, **kw):
+        super().__init__(master, fg_color=C["panel"], corner_radius=10, border_width=1, border_color=C["line"], **kw)
+        if title:
+            ctk.CTkLabel(self, text=title.upper(), font=font(10, "semi"), text_color=C["faint"]).pack(
+                anchor="w", padx=16, pady=(12, 0))
+
+
+class Metric(ctk.CTkFrame):
+    """Label over a large tabular number with a unit."""
+
+    def __init__(self, master, label, unit="", size=26):
+        super().__init__(master, fg_color="transparent")
+        ctk.CTkLabel(self, text=label, font=font(11), text_color=C["muted"]).pack(anchor="w")
+        row = ctk.CTkFrame(self, fg_color="transparent")
+        row.pack(anchor="w")
+        self.value = ctk.CTkLabel(row, text="--", font=font(size, "monomed"), text_color=C["text"])
+        self.value.pack(side="left")
+        if unit:
+            ctk.CTkLabel(row, text=unit, font=font(12), text_color=C["faint"]).pack(side="left", padx=(5, 0), pady=(6, 0))
+
+    def set(self, text, color=None):
+        self.value.configure(text=text, text_color=color or C["text"])
+
+
+class Dot(tk.Canvas):
+    """Small round status light."""
+
+    def __init__(self, master, size=9, bg=None):
+        super().__init__(master, width=size, height=size, bg=bg or C["panel"], highlightthickness=0)
+        self.s = size
+        self.set(C["faint"])
+
+    def set(self, color):
+        self.delete("all")
+        self.create_oval(1, 1, self.s - 1, self.s - 1, fill=color, outline="")
+
+
+class Row(ctk.CTkFrame):
+    """Label ... value line for detail lists."""
+
+    def __init__(self, master, label):
+        super().__init__(master, fg_color="transparent")
+        ctk.CTkLabel(self, text=label, font=font(12), text_color=C["muted"]).pack(side="left")
+        self.value = ctk.CTkLabel(self, text="--", font=font(12, "mono"), text_color=C["text"])
+        self.value.pack(side="right")
+
+    def set(self, text, color=None):
+        self.value.configure(text=text, text_color=color or C["text"])
+
+
+def button(master, text, command, kind="normal", ic=None, width=None):
+    styles = {
+        "normal":  dict(fg_color=C["raised"], hover_color=C["hover"], text_color=C["text"], border_width=1, border_color=C["line"]),
+        "primary": dict(fg_color=C["accent"], hover_color="#D18E2C", text_color="#1A1205", border_width=0),
+        "danger":  dict(fg_color="#3A1A1C", hover_color="#4A2023", text_color="#F3B3B5", border_width=1, border_color="#5A2629"),
+        "quiet":   dict(fg_color="transparent", hover_color=C["hover"], text_color=C["muted"], border_width=0),
+    }[kind]
+    color = styles["text_color"]
+    b = ctk.CTkButton(master, text=text, command=command, height=34, corner_radius=7, font=font(12, "med"),
+                      image=icon(ic, 15, color) if ic else None, compound="left", **styles)
+    if width:
+        b.configure(width=width)
+    return b
+
+
+class PhaseRail(tk.Canvas):
+    def __init__(self, master):
+        super().__init__(master, height=74, bg=C["panel"], highlightthickness=0)
+        self.current, self.lift = "PAD", False
+        self.bind("<Configure>", lambda e: self.draw())
+
+    def set(self, phase, lift=False):
+        if phase != self.current or lift != self.lift:
+            self.current, self.lift = phase, lift
+            self.draw()
+
+    def draw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        n = len(PHASES)
+        x0, x1, y = 40, max(80, w - 40), 26
+        idx = PHASES.index(self.current) if self.current in PHASES else 0
+        step = (x1 - x0) / (n - 1)
+        self.create_line(x0, y, x1, y, fill=C["line"], width=2)
+        if idx > 0:
+            self.create_line(x0, y, x0 + step * idx, y, fill=C["accent"], width=2)
+        for i, ph in enumerate(PHASES):
+            x = x0 + step * i
+            if i < idx:
+                self.create_oval(x - 6, y - 6, x + 6, y + 6, fill=C["accent"], outline="")
+            elif i == idx:
+                self.create_oval(x - 11, y - 11, x + 11, y + 11, outline=C["accent"], width=2)
+                self.create_oval(x - 6, y - 6, x + 6, y + 6, fill=C["accent"], outline="")
+            else:
+                self.create_oval(x - 6, y - 6, x + 6, y + 6, fill=C["panel"], outline=C["faint"], width=2)
+            self.create_text(x, y + 27, text=PHASE_LABEL[ph], fill=C["text"] if i == idx else C["muted"],
+                             font=(SANS_SEMI if i == idx else SANS, 10))
+        if self.lift:
+            self.create_text(x1, 6, text="LIFT TEST", anchor="ne", fill=C["accent"], font=(SANS_SEMI, 9))
+
+
+class Horizon(tk.Canvas):
+    """Small attitude indicator driven by pitch / roll."""
+
+    def __init__(self, master, size=210):
+        super().__init__(master, width=size, height=size, bg=C["panel"], highlightthickness=0)
+        self.s = size
+
+    def set(self, pitch, roll):
+        s, c = self.s, self.s / 2
+        k = 2.2                                               # pixels per degree of pitch
+        self.delete("all")
+        a = math.radians(-roll)                               # horizon turns opposite to the roll
+        dx, dy = math.cos(a), -math.sin(a)                    # along the horizon (screen y points down)
+        nx, ny = -dy, dx                                      # normal, pointing to the ground
+        off = max(-c, min(c, pitch * k))                      # nose up -> horizon moves down
+        cx, cy = c + nx * off, c + ny * off
+        L = s * 2
+        p1 = (cx - dx * L, cy - dy * L)
+        p2 = (cx + dx * L, cy + dy * L)
+        self.create_rectangle(0, 0, s, s, fill="#1E3A57", outline="")
+        self.create_polygon(p1[0], p1[1], p2[0], p2[1], p2[0] + nx * L, p2[1] + ny * L,
+                            p1[0] + nx * L, p1[1] + ny * L, fill="#4A3524", outline="")
+        self.create_line(p1[0], p1[1], p2[0], p2[1], fill="#D9DEE5", width=2)
+        for deg in (-20, -10, 10, 20):                        # pitch ladder
+            mx, my = cx - nx * deg * k, cy - ny * deg * k
+            hl = 30 if deg % 20 == 0 else 18
+            self.create_line(mx - dx * hl, my - dy * hl, mx + dx * hl, my + dy * hl, fill="#C9CFD8", width=1)
+        # fixed aircraft symbol + ring mask
+        self.create_line(c - 46, c, c - 14, c, fill=C["accent"], width=3)
+        self.create_line(c + 14, c, c + 46, c, fill=C["accent"], width=3)
+        self.create_oval(c - 3, c - 3, c + 3, c + 3, fill=C["accent"], outline="")
+        self.create_oval(-s * 0.2, -s * 0.2, s * 1.2, s * 1.2, outline=C["panel"], width=s * 0.4)
+        self.create_oval(4, 4, s - 4, s - 4, outline=C["line"], width=2)
+
+
+# =============================================================================
+# Application
+# =============================================================================
+class Dock(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.title("Aakashvani Ground Station")
+        self.geometry("1280x760+40+20")
+        self.minsize(1080, 680)
+        self.configure(fg_color=C["bg"])
 
-        self.title("AAKASHVANI — Mission Control & Flasher Dock (CAN-7USAT 2026)")
-        self.geometry("1240x820")
-        self.minsize(1050, 720)
+        self.settings = self._load_settings()
+        self.link = None
+        self.rx = queue.Queue()
+        self.capture = None            # (kind, end_prefix, lines) while a log list / dump is streaming
+        self.tm = dict(phase="PAD", lift=False, agl=0.0, v=0.0, peak=0.0, arms=0, esc=0, dist=0.0,
+                          brg=0.0, sats=0, held=0, sp=(0.0, 0.0), hdg=0.0, mtime="--:--:--", pkts=0,
+                          pressure=0.0, temp=0.0, lat=0.0, lon=0.0, q=(1, 0, 0, 0), mount=0, att_rate=0.0)
+        self.health = {}
+        self.env = {}
+        self.alt_hist = deque(maxlen=600)
+        self.events = []
+        self._att_count, self._att_t0, self._last_att_ui = 0, time.time(), 0.0
+        self._rx_count, self._rx_t0, self._rx_rate = 0, time.time(), 0.0
+        self._last_line_t = 0.0
+        self.sim_running = False
+        self.tm_file = None            # Flight_<TEAM_ID>.csv: every received frame (graded by the judges)
+        self.tm_rows = 0
 
-        # Serial Connection
-        self.ser = None
-        self.serial_thread = None
-        self.is_connected = False
-        self.stop_serial = threading.Event()
-        self.serial_rx_queue = queue.Queue()
+        self._build_header()
+        self._build_body()
+        self._build_statusbar()
+        self.show("overview")
 
-        # Telemetry Data Buffers (for live plotting)
-        self.data_history_len = 120
-        self.time_buffer = deque(maxlen=self.data_history_len)
-        self.alt_buffer = deque(maxlen=self.data_history_len)
-        self.pres_buffer = deque(maxlen=self.data_history_len)
-        self.temp_buffer = deque(maxlen=self.data_history_len)
-        self.volt_buffer = deque(maxlen=self.data_history_len)
-        self.state_buffer = deque(maxlen=self.data_history_len)
-
-        # Environmental Telemetry Buffers (SHT4x & SGP41)
-        self.hum_buffer = deque(maxlen=self.data_history_len)
-        self.voc_buffer = deque(maxlen=self.data_history_len)
-        self.nox_buffer = deque(maxlen=self.data_history_len)
-        self.env_time_buffer = deque(maxlen=self.data_history_len)
-        self.latest_temp = 32.5
-        self.latest_hum = 52.4
-        self.latest_voc = 100
-        self.latest_nox = 1
-
-        # Telemetry logging
-        self.log_file = None
-        self.is_logging = False
-
-        # Live Telemetry Rate Meter
-        self._rx_pkt_count = 0
-        self._last_rate_time = time.time()
-
-        # Attitude state. The firmware identifies the mount (parallel / perpendicular) and
-        # references the attitude itself; q_tare is only an optional viewer-side zero.
-        self.q_raw = Q_IDENTITY          # vehicle quaternion as received
-        self.q_tare = Q_IDENTITY         # operator zero (quaternion, never Euler offsets)
-        self.att_last_rx = 0.0           # host time of the last ATT line (quaternion stream)
-        self.att_count = 0
-        self.att_rate_hz = 0.0
-        self._att_rate_t0 = time.time()
-        self.att_mcu_ms = 0
-        self.mount_name = MOUNT_NAMES[0]
-
-        # Build UI Layout
-        self._create_header()
-        self._create_tabview()
-        self._create_statusbar()
-
-        # Polling Timer for Serial Queue and UI updates
-        self.after(20, self._process_serial_queue)
-        self.after(500, self._update_plots)
-
-        # 3D Telemetry and WebSocket Server
         if telemetry_3d_server:
             try:
                 telemetry_3d_server.start_server(http_port=8055, ws_port=8765)
-            except Exception as e:
-                print(f"[Dock] Note: 3D Server start: {e}")
-
-    # -------------------------------------------------------------------------
-    # Header & Navigation
-    # -------------------------------------------------------------------------
-    def _create_header(self):
-        header_frame = ctk.CTkFrame(self, height=60, corner_radius=0)
-        header_frame.pack(fill="x", side="top", padx=0, pady=0)
-
-        title_lbl = ctk.CTkLabel(
-            header_frame,
-            text="AAKASHVANI MISSION CONTROL & DOCK",
-            font=ctk.CTkFont(size=20, weight="bold")
-        )
-        title_lbl.pack(side="left", padx=20, pady=12)
-
-        subtitle_lbl = ctk.CTkLabel(
-            header_frame,
-            text="SVNIT Aerospace | CAN-7USAT 2026",
-            font=ctk.CTkFont(size=12, slant="italic"),
-            text_color="gray"
-        )
-        subtitle_lbl.pack(side="left", padx=5, pady=12)
-
-        # Connection Bar in Header
-        conn_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        conn_frame.pack(side="right", padx=15, pady=8)
-
-        self.port_combo = ctk.CTkComboBox(conn_frame, width=120, values=self._get_available_ports())
-        self.port_combo.pack(side="left", padx=5)
-
-        self.refresh_btn = ctk.CTkButton(conn_frame, text="↻", width=32, command=self._refresh_ports)
-        self.refresh_btn.pack(side="left", padx=2)
-
-        self.baud_combo = ctk.CTkComboBox(conn_frame, width=105, values=["115200", "921600", "57600", "9600"])
-        self.baud_combo.set("115200")
-        self.baud_combo.pack(side="left", padx=5)
-
-        self.connect_btn = ctk.CTkButton(conn_frame, text="Connect", width=90, fg_color="#2ecc71", hover_color="#27ae60", command=self._toggle_connection)
-        self.connect_btn.pack(side="left", padx=5)
-
-    def _create_tabview(self):
-        self.tabview = ctk.CTkTabview(self)
-        self.tabview.pack(fill="both", expand=True, padx=15, pady=(5, 10))
-
-        # Define Tabs
-        self.tab_flasher = self.tabview.add("⚡ Flasher & Chip Manager")
-        self.tab_gcs = self.tabview.add("📡 Ground Station (GCS)")
-        self.tab_3d = self.tabview.add("🛰️ 3D IMU Visualizer")
-        self.tab_env = self.tabview.add("🌿 Environmental & Calibration")
-        self.tab_fc = self.tabview.add("🛰️️ Flight Computer (FC)")
-        self.tab_hil = self.tabview.add("🧪 Sensorless Test & HIL")
-        self.tab_terminal = self.tabview.add("💻 Serial Terminal")
-
-        # Build each Tab
-        self._build_flasher_tab()
-        self._build_gcs_tab()
-        self._build_3d_tab()
-        self._build_env_tab()
-        self._build_fc_tab()
-        self._build_hil_tab()
-        self._build_terminal_tab()
-
-    def _create_statusbar(self):
-        self.status_frame = ctk.CTkFrame(self, height=28, corner_radius=0)
-        self.status_frame.pack(fill="x", side="bottom")
-
-        self.status_lbl = ctk.CTkLabel(self.status_frame, text="Status: Ready | Port: Disconnected", font=ctk.CTkFont(size=11), text_color="gray")
-        self.status_lbl.pack(side="left", padx=15, pady=2)
-
-        self.packet_rate_lbl = ctk.CTkLabel(self.status_frame, text="Packets: 0 | 0.0 Hz", font=ctk.CTkFont(size=11), text_color="gray")
-        self.packet_rate_lbl.pack(side="right", padx=15, pady=2)
-
-    # -------------------------------------------------------------------------
-    # TAB 1: FLASHER & CHIP MANAGER
-    # -------------------------------------------------------------------------
-    def _build_flasher_tab(self):
-        parent = self.tab_flasher
-
-        # Left Column: Configuration & Options
-        left_box = ctk.CTkFrame(parent, width=420)
-        left_box.pack(side="left", fill="both", padx=10, pady=10, expand=False)
-
-        ctk.CTkLabel(left_box, text="Firmware Flasher", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=15, pady=(15, 5))
-        ctk.CTkLabel(left_box, text="Target Firmware Role:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=15, pady=(10, 2))
-
-        self.role_var = tk.StringVar(value="FC")
-        r1 = ctk.CTkRadioButton(left_box, text="Flight Computer / Transmitter (ROLE_FC)", variable=self.role_var, value="FC")
-        r1.pack(anchor="w", padx=20, pady=4)
-        r2 = ctk.CTkRadioButton(left_box, text="Ground Station Receiver Bridge (ROLE_GCS)", variable=self.role_var, value="GCS")
-        r2.pack(anchor="w", padx=20, pady=4)
-
-        # Options Checkboxes
-        ctk.CTkLabel(left_box, text="Build & Flash Options:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=15, pady=(15, 2))
-
-        self.bit_bypass_var = tk.BooleanVar(value=True)
-        cb_bit = ctk.CTkCheckBox(left_box, text="Sensorless Bench Mode (BIT Bypass)", variable=self.bit_bypass_var)
-        cb_bit.pack(anchor="w", padx=20, pady=4)
-
-        self.erase_flash_var = tk.BooleanVar(value=False)
-        cb_erase = ctk.CTkCheckBox(left_box, text="Erase Entire Flash Before Flashing", variable=self.erase_flash_var)
-        cb_erase.pack(anchor="w", padx=20, pady=4)
-
-        # Chip Operations Buttons
-        ctk.CTkLabel(left_box, text="Hardware Actions:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=15, pady=(15, 2))
-
-        btn_chip_info = ctk.CTkButton(left_box, text="🔍 Detect Chip & Flash Info", fg_color="#34495e", hover_color="#2c3e50", command=self._action_detect_chip)
-        btn_chip_info.pack(fill="x", padx=20, pady=6)
-
-        btn_flash = ctk.CTkButton(left_box, text="⚡ FLASH TARGET FIRMWARE", fg_color="#2980b9", hover_color="#1f618d", font=ctk.CTkFont(size=14, weight="bold"), height=40, command=self._action_flash_firmware)
-        btn_flash.pack(fill="x", padx=20, pady=12)
-
-        btn_erase = ctk.CTkButton(left_box, text="⚠️ Erase Entire Flash", fg_color="#c0392b", hover_color="#962d22", command=self._action_erase_flash)
-        btn_erase.pack(fill="x", padx=20, pady=4)
-
-        # Right Column: Live Output Console
-        right_box = ctk.CTkFrame(parent)
-        right_box.pack(side="right", fill="both", padx=10, pady=10, expand=True)
-
-        ctk.CTkLabel(right_box, text="Flasher & Hardware Diagnostics Log", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=15, pady=(15, 5))
-
-        self.flash_log_txt = ctk.CTkTextbox(right_box, font=("Consolas", 11), wrap="char")
-        self.flash_log_txt.pack(fill="both", expand=True, padx=15, pady=(5, 15))
-
-    # -------------------------------------------------------------------------
-    # TAB 2: GROUND STATION (GCS) TELEMETRY DOCK
-    # -------------------------------------------------------------------------
-    def _build_gcs_tab(self):
-        parent = self.tab_gcs
-
-        # Left Column: Metrics Grid & Flight State Indicator
-        left_col = ctk.CTkFrame(parent, width=380)
-        left_col.pack(side="left", fill="both", padx=10, pady=10, expand=False)
-
-        # Flight State Card
-        state_card = ctk.CTkFrame(left_col, fg_color="#1c2833")
-        state_card.pack(fill="x", padx=10, pady=8)
-
-        ctk.CTkLabel(state_card, text="CURRENT FLIGHT PHASE", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").pack(pady=(8, 0))
-        self.state_badge = ctk.CTkLabel(state_card, text="PRE_FLIGHT (0)", font=ctk.CTkFont(size=18, weight="bold"), text_color="#3498db")
-        self.state_badge.pack(pady=(2, 8))
-
-        # Real-time Metrics Grid
-        metrics_box = ctk.CTkFrame(left_col)
-        metrics_box.pack(fill="both", expand=True, padx=10, pady=5)
-
-        self.metric_labels = {}
-        fields_display = [
-            ("Altitude (AGL)", "0.00 m", "alt"),
-            ("Pressure", "101325 Pa", "pres"),
-            ("Temperature", "32.5 °C", "temp"),
-            ("Relative Humidity", "52.4 %", "hum"),
-            ("VOC Air Quality", "100 (Clean)", "voc"),
-            ("NOx Gas Index", "1 (Normal)", "nox"),
-            ("Battery Voltage", "7.40 V", "volt"),
-            ("Mission Time", "00:00:00", "mtime"),
-            ("Packet Count", "0", "pcount"),
-            ("GNSS Satellites", "0", "sats"),
-            ("Latitude / Long", "0.0000, 0.0000", "gps"),
-            ("Tilt (Pitch/Roll)", "0.0°, 0.0°", "tilt"),
-            ("Rotation Z (Heading)", "0.0°", "rotz"),
-            ("Sensor Constellation", "4/4 Active", "sensors")
-        ]
-
-        for idx, (title, default_val, key) in enumerate(fields_display):
-            row = idx // 2
-            col = idx % 2
-            card = ctk.CTkFrame(metrics_box, fg_color="#212f3d", corner_radius=6)
-            card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
-            metrics_box.grid_columnconfigure(col, weight=1)
-
-            ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=10), text_color="gray").pack(anchor="w", padx=8, pady=(4, 0))
-            lbl = ctk.CTkLabel(card, text=default_val, font=ctk.CTkFont(size=14, weight="bold"))
-            lbl.pack(anchor="w", padx=8, pady=(0, 4))
-            self.metric_labels[key] = lbl
-
-        # Telecommand Uplink Box
-        cmd_box = ctk.CTkFrame(left_col)
-        cmd_box.pack(fill="x", padx=10, pady=8)
-
-        ctk.CTkLabel(cmd_box, text="Telecommand Uplink (GCS ➔ FC)", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(6, 4))
-
-        quick_cmds_frame = ctk.CTkFrame(cmd_box, fg_color="transparent")
-        quick_cmds_frame.pack(fill="x", padx=5, pady=2)
-
-        ctk.CTkButton(quick_cmds_frame, text="CAL (Zero Alt)", width=95, command=lambda: self._send_command("1234,CAL\n")).pack(side="left", padx=3)
-        ctk.CTkButton(quick_cmds_frame, text="CX ON", width=70, command=lambda: self._send_command("1234,CX,ON\n")).pack(side="left", padx=3)
-        ctk.CTkButton(quick_cmds_frame, text="CX OFF", width=70, command=lambda: self._send_command("1234,CX,OFF\n")).pack(side="left", padx=3)
-        ctk.CTkButton(quick_cmds_frame, text="ABORT", width=75, fg_color="#c0392b", hover_color="#962d22", command=lambda: self._send_command("1234,ABORT\n")).pack(side="left", padx=3)
-        ctk.CTkButton(quick_cmds_frame, text="🛰️ 3D Body", width=80, fg_color="#8e44ad", hover_color="#732d91", command=self._open_3d_viewer).pack(side="left", padx=3)
-
-        # Right Column: Real-Time Matplotlib Telemetry Plots
-        right_col = ctk.CTkFrame(parent)
-        right_col.pack(side="right", fill="both", padx=10, pady=10, expand=True)
-
-        if MATPLOTLIB_AVAILABLE:
-            self.fig = Figure(figsize=(6, 5), dpi=100, facecolor='#2b2b2b')
-            self.ax1 = self.fig.add_subplot(211)
-            self.ax2 = self.fig.add_subplot(212)
-
-            # --- TOP PLOT: Altitude with Phase Thresholds ---
-            self.line_alt, = self.ax1.plot([], [], color="#00d2d3", linewidth=2.0, label="Altitude (m AGL)")
-            self.ax1.axhline(600.0, color="#2ecc71", linestyle=":", alpha=0.7, label="Chute (600m)")
-            self.ax1.axhline(350.0, color="#1abc9c", linestyle="--", alpha=0.7, label="PID Hover (350m)")
-            self.ax1.axhline(0.0, color="#7f8c8d", linestyle="-", alpha=0.5)
-            self.ax1.legend(loc="upper right", fontsize=7)
-            self._style_axis(self.ax1, "Altitude AGL (m)", "#00d2d3")
-
-            # --- BOTTOM PLOT: Flight Computer Mission State Ladder ---
-            self.line_state, = self.ax2.step([], [], where="post", color="#f39c12", linewidth=2.0, label="Flight State Code")
-            self.ax2.set_yticks([2, 3, 4, 6, 7])
-            self.ax2.set_yticklabels(["2: PAD", "3: ASCENT", "4: CHUTE", "6: HOVER", "7: LAND"])
-            self.ax2.set_ylim(1.5, 7.5)
-            self.ax2.legend(loc="upper right", fontsize=7)
-            self._style_axis(self.ax2, "Mission State", "#f39c12")
-
-            self.fig.tight_layout()
-
-            self.canvas = FigureCanvasTkAgg(self.fig, master=right_col)
-            self.canvas.draw()
-            self.canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
-        else:
-            ctk.CTkLabel(right_col, text="Matplotlib not installed. Telemetry graphs unavailable.").pack(pady=50)
-
-    def _style_axis(self, ax, ylabel, color):
-        ax.set_facecolor('#1f1f1f')
-        ax.tick_params(colors='white', labelsize=8)
-        ax.set_ylabel(ylabel, color=color, fontsize=9, weight='bold')
-        ax.grid(True, linestyle='--', alpha=0.3, color='gray')
-        for spine in ax.spines.values():
-            spine.set_color('#444444')
-
-    # -------------------------------------------------------------------------
-    # TAB: 3D ASSEMBLED BODY & IMU ATTITUDE VISUALIZER
-    # -------------------------------------------------------------------------
-    def _build_3d_tab(self):
-        parent = self.tab_3d
-
-        # Left Column: Real-time Attitude Readouts & Launcher Controls
-        left_box = ctk.CTkFrame(parent, width=410)
-        left_box.pack(side="left", fill="both", padx=10, pady=10, expand=False)
-
-        ctk.CTkLabel(left_box, text="3D CanSat Body & IMU Attitude", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=15, pady=(15, 3))
-        ctk.CTkLabel(left_box, text="Live orientation tracking with assembled REV_H CAD body", font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w", padx=15, pady=(0, 8))
-
-        # Attitude Angle Badges Card
-        angles_frame = ctk.CTkFrame(left_box, fg_color="#1c2833")
-        angles_frame.pack(fill="x", padx=10, pady=6)
-
-        grid_angles = ctk.CTkFrame(angles_frame, fg_color="transparent")
-        grid_angles.pack(fill="x", padx=8, pady=8)
-
-        # Pitch
-        c_pitch = ctk.CTkFrame(grid_angles, fg_color="#212f3d", corner_radius=6)
-        c_pitch.grid(row=0, column=0, padx=4, pady=4, sticky="nsew")
-        ctk.CTkLabel(c_pitch, text="PITCH (X)", font=ctk.CTkFont(size=10, weight="bold"), text_color="#38bdf8").pack(pady=(4,0))
-        self.lbl_3d_pitch = ctk.CTkLabel(c_pitch, text="+0.0°", font=ctk.CTkFont(size=18, weight="bold"), text_color="#38bdf8")
-        self.lbl_3d_pitch.pack(pady=(0,4))
-
-        # Roll
-        c_roll = ctk.CTkFrame(grid_angles, fg_color="#212f3d", corner_radius=6)
-        c_roll.grid(row=0, column=1, padx=4, pady=4, sticky="nsew")
-        ctk.CTkLabel(c_roll, text="ROLL (Y)", font=ctk.CTkFont(size=10, weight="bold"), text_color="#2ecc71").pack(pady=(4,0))
-        self.lbl_3d_roll = ctk.CTkLabel(c_roll, text="+0.0°", font=ctk.CTkFont(size=18, weight="bold"), text_color="#2ecc71")
-        self.lbl_3d_roll.pack(pady=(0,4))
-
-        # Yaw
-        c_yaw = ctk.CTkFrame(grid_angles, fg_color="#212f3d", corner_radius=6)
-        c_yaw.grid(row=0, column=2, padx=4, pady=4, sticky="nsew")
-        ctk.CTkLabel(c_yaw, text="YAW (Z)", font=ctk.CTkFont(size=10, weight="bold"), text_color="#f39c12").pack(pady=(4,0))
-        self.lbl_3d_yaw = ctk.CTkLabel(c_yaw, text="0.0°", font=ctk.CTkFont(size=18, weight="bold"), text_color="#f39c12")
-        self.lbl_3d_yaw.pack(pady=(0,4))
-
-        grid_angles.grid_columnconfigure(0, weight=1)
-        grid_angles.grid_columnconfigure(1, weight=1)
-        grid_angles.grid_columnconfigure(2, weight=1)
-
-        # IMU mount: auto-detected by the firmware from gravity at boot / on Zero Tare
-        orient_frame = ctk.CTkFrame(left_box)
-        orient_frame.pack(fill="x", padx=10, pady=6)
-        ctk.CTkLabel(orient_frame, text="IMU Mount (auto-detected at boot):", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(6, 2))
-        self.lbl_mount = ctk.CTkLabel(orient_frame, text=self.mount_name, font=ctk.CTkFont(size=13, weight="bold"), text_color="#f39c12")
-        self.lbl_mount.pack(anchor="w", padx=12, pady=(0, 2))
-        self.lbl_att_link = ctk.CTkLabel(orient_frame, text="Attitude stream: waiting...", font=ctk.CTkFont(size=11), text_color="gray")
-        self.lbl_att_link.pack(anchor="w", padx=12, pady=(0, 6))
-
-        # Launch 3D Viewer Actions
-        action_frame = ctk.CTkFrame(left_box)
-        action_frame.pack(fill="x", padx=10, pady=8)
-
-        ctk.CTkLabel(action_frame, text="Interactive 3D Visualizer Window:", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(8, 4))
-
-        btn_pyqt = ctk.CTkButton(action_frame, text="🚀 Launch 3D Desktop Window", fg_color="#2980b9", hover_color="#1f618d", font=ctk.CTkFont(size=13, weight="bold"), height=36, command=self._open_3d_viewer)
-        btn_pyqt.pack(fill="x", padx=10, pady=5)
-
-        btn_browser = ctk.CTkButton(action_frame, text="🌐 Open in Web Browser (Chrome/Edge)", fg_color="#34495e", hover_color="#2c3e50", command=self._open_3d_browser)
-        btn_browser.pack(fill="x", padx=10, pady=3)
-
-        self.lbl_3d_server_status = ctk.CTkLabel(action_frame, text="● 3D Stream: ws://127.0.0.1:8765", font=ctk.CTkFont(size=11), text_color="#2ecc71")
-        self.lbl_3d_server_status.pack(pady=(4, 6))
-
-        # Baseline Calibration & Zero Tare Controls
-        tare_frame = ctk.CTkFrame(left_box)
-        tare_frame.pack(fill="x", padx=10, pady=6)
-
-        ctk.CTkLabel(tare_frame, text="Attitude Baseline Calibration:", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(6, 4))
-
-        tare_btns = ctk.CTkFrame(tare_frame, fg_color="transparent")
-        tare_btns.pack(fill="x", padx=5, pady=2)
-
-        ctk.CTkButton(tare_btns, text="⚖️ Zero Tare (Set 0°)", fg_color="#27ae60", hover_color="#1e8449", command=self._zero_tare_imu).pack(side="left", padx=3, fill="x", expand=True)
-        ctk.CTkButton(tare_btns, text="Reset Tare", fg_color="#7f8c8d", hover_color="#626567", command=self._reset_tare_imu).pack(side="left", padx=3, fill="x", expand=True)
-
-        # Bench Simulation & Testing Controls
-        test_frame = ctk.CTkFrame(left_box)
-        test_frame.pack(fill="x", padx=10, pady=6)
-
-        ctk.CTkLabel(test_frame, text="Sensorless Bench IMU Motion Tests:", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(6, 4))
-
-        test_btns = ctk.CTkFrame(test_frame, fg_color="transparent")
-        test_btns.pack(fill="x", padx=5, pady=2)
-
-        ctk.CTkButton(test_btns, text="Level (0,0)", width=80, command=lambda: self._test_inject_angles(0, 0, 0)).pack(side="left", padx=2)
-        ctk.CTkButton(test_btns, text="Pitch +30°", width=80, command=lambda: self._test_inject_angles(30, 0, 0)).pack(side="left", padx=2)
-        ctk.CTkButton(test_btns, text="Roll +45°", width=80, command=lambda: self._test_inject_angles(0, 45, 0)).pack(side="left", padx=2)
-        ctk.CTkButton(test_btns, text="Nose Down", width=80, command=lambda: self._test_inject_angles(-45, 0, 0)).pack(side="left", padx=2)
-
-        self.btn_sine_test = ctk.CTkButton(test_frame, text="▶ Start Automated Sine Motion Wave", fg_color="#8e44ad", hover_color="#732d91", command=self._toggle_sine_test)
-        self.btn_sine_test.pack(fill="x", padx=10, pady=(6, 8))
-
-        # Right Column: Model Info & Subsystem Hierarchy
-        right_box = ctk.CTkFrame(parent)
-        right_box.pack(side="right", fill="both", padx=10, pady=10, expand=True)
-
-        ctk.CTkLabel(right_box, text="3D CAD Vehicle Integration & Subsystem Hierarchy", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=15, pady=(15, 5))
-
-        info_txt = (
-            "CAN-7USAT REV_H Mechanical Architecture Details:\n\n"
-            "• Assembled 3D CAD Body: Final_Body_Cansat / cansat_assembly.glb (406mm H x 154mm Ø)\n"
-            "• Subsystems Integrated in 3D Visualization:\n"
-            "    - Module 01: Outer NACA Fin Structure & Aerodynamic Hull\n"
-            "    - Module 02: Quadcopter Drone Deployment Mechanism (Arms, Actuator Rod, Pins)\n"
-            "    - Module 03: Turbine Generator System (Dual Counter-Rotating Rotors, Bushings)\n"
-            "    - Module 04: Parachute Recovery System (Parachute Bay & Ejection Lid)\n"
-            "    - Module 05: Electronics Bay (Monolithic Cage, Battery Rack, Pitot Mount, Camera)\n\n"
-            "Real-Time Dynamic Attitude Tracking:\n"
-            "• Center-of-Mass Pivot: Exact geometric centroid offset at Z=197mm for realistic physical rotation\n"
-            "• Attitude: firmware quaternion (ATT, 50 Hz, MCU-timestamped); Euler ZXY for readouts only\n"
-            "• Render Engine: Three.js WebGL, quaternion SLERP on the MCU time base (no gimbal-lock spins)\n"
-            "• Broadcast Server: Zero-latency local WebSocket pipeline at ws://127.0.0.1:8765\n"
-        )
-        lbl_info = ctk.CTkLabel(right_box, text=info_txt, font=ctk.CTkFont(size=12), justify="left", text_color="#bdc3c7")
-        lbl_info.pack(anchor="nw", padx=15, pady=10)
-
-    def _open_3d_viewer(self):
-        script = os.path.join(os.path.dirname(__file__), "launch_3d_visualizer.py")
-        threading.Thread(target=lambda: subprocess.run([sys.executable, script]), daemon=True).start()
-
-    def _open_3d_browser(self):
-        import webbrowser
-        webbrowser.open("http://localhost:8055/")
-
-    def _zero_tare_imu(self):
-        if self.is_connected and (time.time() - self.att_last_rx) < 1.0:
-            # Firmware re-identifies the mount, re-levels and zeroes heading on the IMU itself
-            self.q_tare = Q_IDENTITY
-            self._send_command("CMD,1234,TARE\r\n")
-        else:
-            self.q_tare = quat_conj(self.q_raw)
-        self._update_3d_tab_readouts(0.0, 0.0, 0.0)
-
-    def _reset_tare_imu(self):
-        self.q_tare = Q_IDENTITY
-        p, r, y = euler_zxy(self.q_raw)
-        self._update_3d_tab_readouts(p, r, y)
-
-    def _test_inject_angles(self, p, r, y):
-        self.att_last_rx = 0.0
-        self.q_raw = quat_from_zxy(float(p), float(r), float(y))
-        eff_pitch, eff_roll, eff_yaw = euler_zxy(apply_tare(self.q_tare, self.q_raw))
-        if telemetry_3d_server:
-            telemetry_3d_server.update_telemetry(pitch=eff_pitch, roll=eff_roll, yaw=eff_yaw, alt=25.0, state=2, state_name="ON_PAD", pcount=1)
-        self._update_3d_tab_readouts(eff_pitch, eff_roll, eff_yaw, alt=25.0, state=2, state_str="ON_PAD")
-
-    def _toggle_sine_test(self):
-        if not hasattr(self, '_sine_test_active'):
-            self._sine_test_active = False
-
-        self._sine_test_active = not self._sine_test_active
-        if self._sine_test_active:
-            self.btn_sine_test.configure(text="⏹ Stop Automated Sine Motion Wave", fg_color="#c0392b", hover_color="#962d22")
-            threading.Thread(target=self._run_sine_test_loop, daemon=True).start()
-        else:
-            self.btn_sine_test.configure(text="▶ Start Automated Sine Motion Wave", fg_color="#8e44ad", hover_color="#732d91")
-
-    def _run_sine_test_loop(self):
-        t = 0.0
-        pcount = 0
-        while getattr(self, '_sine_test_active', False):
-            t += 0.05
-            pcount += 1
-            p = 25.0 * math.sin(t)
-            r = 40.0 * math.cos(t * 0.8)
-            y = (t * 20.0) % 360.0
-            alt = 150.0 + 30.0 * math.sin(t * 0.5)
-            pres = 101325.0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
-            if telemetry_3d_server:
-                telemetry_3d_server.update_telemetry(pitch=p, roll=r, yaw=y, alt=alt, pres=pres, state=3, state_name="ASCENT", pcount=pcount)
-            self.after(0, lambda p=p, r=r, y=y, alt=alt, pres=pres: self._update_3d_tab_readouts(p, r, y, alt=alt, pres=pres, state=3, state_str="ASCENT"))
-            time.sleep(0.04)
-
-    def _update_3d_tab_readouts(self, p, r, y, alt=None, pres=None, state=None, state_str=None):
-        if hasattr(self, 'lbl_3d_pitch'):
-            sign_p = "+" if p >= 0 else ""
-            sign_r = "+" if r >= 0 else ""
-            self.lbl_3d_pitch.configure(text=f"{sign_p}{p:.1f}°")
-            self.lbl_3d_roll.configure(text=f"{sign_r}{r:.1f}°")
-            self.lbl_3d_yaw.configure(text=f"{y:.1f}°")
-        if hasattr(self, 'metric_labels'):
-            if "tilt" in self.metric_labels:
-                self.metric_labels["tilt"].configure(text=f"{p:.1f}°, {r:.1f}°")
-            if "rotz" in self.metric_labels:
-                self.metric_labels["rotz"].configure(text=f"{y:.1f}°")
-            if alt is not None and "alt" in self.metric_labels:
-                self.metric_labels["alt"].configure(text=f"{alt:.2f} m")
-            if pres is not None and "pres" in self.metric_labels:
-                self.metric_labels["pres"].configure(text=f"{pres:.1f} Pa")
-        if state is not None and hasattr(self, 'state_badge'):
-            state_info = STATE_NAMES.get(state, (state_str or f"STATE_{state}", "#3498db"))
-            self.state_badge.configure(text=f"{state_info[0]} ({state})", text_color=state_info[1])
-
-    # -------------------------------------------------------------------------
-    # TAB: ENVIRONMENTAL TELEMETRY & GAS SENSOR CALIBRATION CURVES
-    # -------------------------------------------------------------------------
-    def _build_env_tab(self):
-        parent = self.tab_env
-
-        # Left Column: KPI Cards & Physical Models
-        left_box = ctk.CTkFrame(parent, width=380)
-        left_box.pack(side="left", fill="both", padx=10, pady=10, expand=False)
-
-        ctk.CTkLabel(left_box, text="🌿 Environmental Suite & Gas Index", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=15, pady=(15, 3))
-        ctk.CTkLabel(left_box, text="Sensirion SHT4x (RHT) & SGP41 (VOC/NOx) Sensors", font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w", padx=15, pady=(0, 10))
-
-        # 4 Environmental Metric Cards in Left Column
-        cards_frame = ctk.CTkFrame(left_box, fg_color="transparent")
-        cards_frame.pack(fill="x", padx=10, pady=5)
-
-        # 1. Temperature Card
-        c_temp = ctk.CTkFrame(cards_frame, fg_color="#212f3d", corner_radius=6)
-        c_temp.pack(fill="x", pady=4)
-        ctk.CTkLabel(c_temp, text="AMBIENT TEMPERATURE (SHT4x)", font=ctk.CTkFont(size=10, weight="bold"), text_color="#ff7675").pack(anchor="w", padx=10, pady=(6, 0))
-        self.env_lbl_temp = ctk.CTkLabel(c_temp, text="32.5 °C", font=ctk.CTkFont(size=20, weight="bold"), text_color="#ff7675")
-        self.env_lbl_temp.pack(anchor="w", padx=10, pady=(0, 2))
-        ctk.CTkLabel(c_temp, text="Range: -40°C to +125°C | Precision: ±0.2°C", font=ctk.CTkFont(size=9), text_color="gray").pack(anchor="w", padx=10, pady=(0, 6))
-
-        # 2. Relative Humidity Card
-        c_hum = ctk.CTkFrame(cards_frame, fg_color="#212f3d", corner_radius=6)
-        c_hum.pack(fill="x", pady=4)
-        ctk.CTkLabel(c_hum, text="RELATIVE HUMIDITY (SHT4x)", font=ctk.CTkFont(size=10, weight="bold"), text_color="#00d2d3").pack(anchor="w", padx=10, pady=(6, 0))
-        self.env_lbl_hum = ctk.CTkLabel(c_hum, text="52.4 %", font=ctk.CTkFont(size=20, weight="bold"), text_color="#00d2d3")
-        self.env_lbl_hum.pack(anchor="w", padx=10, pady=(0, 2))
-        ctk.CTkLabel(c_hum, text="Range: 0% to 100% RH | Precision: ±1.8% RH", font=ctk.CTkFont(size=9), text_color="gray").pack(anchor="w", padx=10, pady=(0, 6))
-
-        # 3. VOC Index Card
-        c_voc = ctk.CTkFrame(cards_frame, fg_color="#212f3d", corner_radius=6)
-        c_voc.pack(fill="x", pady=4)
-        ctk.CTkLabel(c_voc, text="VOC AIR QUALITY INDEX (SGP41)", font=ctk.CTkFont(size=10, weight="bold"), text_color="#2ecc71").pack(anchor="w", padx=10, pady=(6, 0))
-        self.env_lbl_voc = ctk.CTkLabel(c_voc, text="100 (Clean Air)", font=ctk.CTkFont(size=20, weight="bold"), text_color="#2ecc71")
-        self.env_lbl_voc.pack(anchor="w", padx=10, pady=(0, 2))
-        ctk.CTkLabel(c_voc, text="Log Scale: 1-500 (100 = Clean Air Baseline)", font=ctk.CTkFont(size=9), text_color="gray").pack(anchor="w", padx=10, pady=(0, 6))
-
-        # 4. NOx Index Card
-        c_nox = ctk.CTkFrame(cards_frame, fg_color="#212f3d", corner_radius=6)
-        c_nox.pack(fill="x", pady=4)
-        ctk.CTkLabel(c_nox, text="NOx GAS INDEX (SGP41)", font=ctk.CTkFont(size=10, weight="bold"), text_color="#f39c12").pack(anchor="w", padx=10, pady=(6, 0))
-        self.env_lbl_nox = ctk.CTkLabel(c_nox, text="1 (Normal Ambient)", font=ctk.CTkFont(size=20, weight="bold"), text_color="#f39c12")
-        self.env_lbl_nox.pack(anchor="w", padx=10, pady=(0, 2))
-        ctk.CTkLabel(c_nox, text="Scale: 1-500 (1 = Negligible / Normal Air)", font=ctk.CTkFont(size=9), text_color="gray").pack(anchor="w", padx=10, pady=(0, 6))
-
-        # Mathematical Calibration Equations Box
-        math_box = ctk.CTkFrame(left_box)
-        math_box.pack(fill="both", expand=True, padx=10, pady=8)
-        ctk.CTkLabel(math_box, text="Sensirion Gas Calibration Model:", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(8, 4))
-
-        formula_text = (
-            "• SGP41 VOC Transfer Function:\n"
-            "  Index_VOC = 100 · (S_raw / S_base)^(-2.5)\n"
-            "  [Normalized to Baseline: Index=100]\n\n"
-            "• SGP41 NOx Response Model:\n"
-            "  Index_NOx = 1 + 499 · (1 - exp(-5.0·Δs))\n"
-            "  [Normalized to Clean Air: Index=1]\n\n"
-            "• SHT4x Temperature & Humidity Linearity:\n"
-            "  T(°C) = -45 + 175 · (S_T / 65535)\n"
-            "  RH(%) = -6 + 125 · (S_RH / 65535)\n\n"
-            "• Zero ADC Artifacts: Calibrated in physical units."
-        )
-        ctk.CTkLabel(math_box, text=formula_text, font=ctk.CTkFont(size=10), text_color="#bdc3c7", justify="left").pack(anchor="w", padx=10, pady=(0, 8))
-
-        # Right Column: Matplotlib Real-time Trends & Calibration Curves
-        right_box = ctk.CTkFrame(parent)
-        right_box.pack(side="right", fill="both", padx=10, pady=10, expand=True)
-
-        if MATPLOTLIB_AVAILABLE:
-            self.env_fig = Figure(figsize=(7, 6), dpi=100, facecolor='#2b2b2b')
-            # 2 Rows: Top = Live Time Trends, Bottom = 2 Calibration Curves (VOC & NOx)
-            self.ax_env_trend = self.env_fig.add_subplot(211)
-            self.ax_voc_curve = self.env_fig.add_subplot(223)
-            self.ax_nox_curve = self.env_fig.add_subplot(224)
-
-            # Top: Live Environmental Trend
-            self.line_env_hum, = self.ax_env_trend.plot([], [], color="#00d2d3", linewidth=2.0, label="Humidity (% RH)")
-            self.line_env_temp, = self.ax_env_trend.plot([], [], color="#ff7675", linewidth=1.8, label="Temperature (°C)")
-            self.line_env_voc, = self.ax_env_trend.plot([], [], color="#2ecc71", linewidth=1.8, linestyle="--", label="VOC Index (1-500)")
-            self.line_env_nox, = self.ax_env_trend.plot([], [], color="#f39c12", linewidth=1.5, linestyle=":", label="NOx Index (1-500)")
-            self.ax_env_trend.legend(loc="upper right", fontsize=8)
-            self._style_axis(self.ax_env_trend, "Live Trend Readings", "#00d2d3")
-
-            # Bottom Left: VOC Calibration Curve
-            x_voc_vals = [0.4 + i * (0.9 / 80) for i in range(81)]
-            y_voc_vals = [min(500.0, max(1.0, 100.0 * (x ** -2.5))) for x in x_voc_vals]
-            self.ax_voc_curve.plot(x_voc_vals, y_voc_vals, color="#2ecc71", linewidth=2.0, label="VOC Characteristic")
-            self.ax_voc_curve.axvline(1.0, color="gray", linestyle=":", alpha=0.6, label="Base (Index=100)")
-            self.ax_voc_curve.axhline(100.0, color="gray", linestyle=":", alpha=0.6)
-            self.dot_voc, = self.ax_voc_curve.plot([1.0], [100.0], 'ro', markersize=8, markeredgecolor='white', label="Operating Point")
-            self.ax_voc_curve.set_xlabel("Signal Ratio (S_raw / S_base)", color="white", fontsize=8)
-            self.ax_voc_curve.set_ylim(0, 520)
-            self.ax_voc_curve.legend(loc="upper right", fontsize=7)
-            self._style_axis(self.ax_voc_curve, "VOC Index (1-500)", "#2ecc71")
-
-            # Bottom Right: NOx Calibration Curve
-            x_nox_vals = [1.0 + i * (0.6 / 80) for i in range(81)]
-            y_nox_vals = [min(500.0, max(1.0, 1.0 + 499.0 * (1.0 - math.exp(-5.0 * (x - 1.0))))) for x in x_nox_vals]
-            self.ax_nox_curve.plot(x_nox_vals, y_nox_vals, color="#f39c12", linewidth=2.0, label="NOx Characteristic")
-            self.ax_nox_curve.axvline(1.0, color="gray", linestyle=":", alpha=0.6, label="Clean (Index=1)")
-            self.dot_nox, = self.ax_nox_curve.plot([1.0], [1.0], 'yo', markersize=8, markeredgecolor='white', label="Operating Point")
-            self.ax_nox_curve.set_xlabel("Signal Ratio (S_raw / S_base)", color="white", fontsize=8)
-            self.ax_nox_curve.set_ylim(0, 520)
-            self.ax_nox_curve.legend(loc="lower right", fontsize=7)
-            self._style_axis(self.ax_nox_curve, "NOx Index (1-500)", "#f39c12")
-
-            self.env_fig.tight_layout()
-            self.env_canvas = FigureCanvasTkAgg(self.env_fig, master=right_box)
-            self.env_canvas.draw()
-            self.env_canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
-        else:
-            ctk.CTkLabel(right_box, text="Matplotlib not installed. Graphs unavailable.").pack(pady=50)
-
-    # -------------------------------------------------------------------------
-    # TAB: FLIGHT COMPUTER (FC) DIAGNOSTICS & MOTOR REACTIONS
-    # -------------------------------------------------------------------------
-    def _build_fc_tab(self):
-        parent = self.tab_fc
-
-        # Grid of Subsystem Health Checks
-        health_frame = ctk.CTkFrame(parent)
-        health_frame.pack(fill="x", padx=15, pady=10)
-
-        ctk.CTkLabel(health_frame, text="Onboard Built-In Test (BIT) Subsystem Status", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
-
-        chips = [
-            ("IMU (BNO085 / BNO055)", "imu_status"),
-            ("Barometer (BMP585)", "baro_status"),
-            ("GNSS / NavIC (N-GS-01)", "gnss_status"),
-            ("Humidity / Temp (SHT4x)", "sht_status"),
-            ("Air Quality VOC/NOx (SGP41)", "sgp_status"),
-            ("Power Monitor (INA260)", "power_status"),
-            ("Blackbox Storage (SD Card)", "sd_status"),
-            ("Telemetry Radio (XBee / LoRa)", "radio_status"),
-            ("Shared I2C Bus (GPIO 38/39)", "i2c_status")
-        ]
-
-        grid_frame = ctk.CTkFrame(health_frame, fg_color="transparent")
-        grid_frame.pack(fill="x", padx=10, pady=5)
-
-        self.sensor_status_badges = {}
-        for idx, (sensor_name, key) in enumerate(chips):
-            col = idx % 3
-            row = idx // 3
-            card = ctk.CTkFrame(grid_frame, fg_color="#212f3d", corner_radius=6)
-            card.grid(row=row, column=col, padx=8, pady=6, sticky="nsew")
-            grid_frame.grid_columnconfigure(col, weight=1)
-
-            ctk.CTkLabel(card, text=sensor_name, font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w", padx=10, pady=(6, 0))
-            badge = ctk.CTkLabel(card, text="● READY", font=ctk.CTkFont(size=12, weight="bold"), text_color="#2ecc71")
-            badge.pack(anchor="w", padx=10, pady=(0, 6))
-            self.sensor_status_badges[key] = badge
-
-        # Quadcopter Motor Mixer & Parachute Reaction Display
-        motor_frame = ctk.CTkFrame(parent)
-        motor_frame.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(motor_frame, text="Quadcopter 'X' Mixer & Parachute Servo Outputs", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
-
-        mixer_grid = ctk.CTkFrame(motor_frame, fg_color="transparent")
-        mixer_grid.pack(fill="both", expand=True, padx=15, pady=10)
-
-        self.motor_bars = {}
-        motors = [
-            ("Motor 1 (Front-Left)", "m1"),
-            ("Motor 2 (Front-Right)", "m2"),
-            ("Motor 3 (Rear-Right)", "m3"),
-            ("Motor 4 (Rear-Left)", "m4"),
-            ("Parachute Release Servo", "servo")
-        ]
-
-        for idx, (label, key) in enumerate(motors):
-            m_card = ctk.CTkFrame(mixer_grid, fg_color="#212f3d", corner_radius=6)
-            m_card.pack(fill="x", pady=6)
-
-            lbl = ctk.CTkLabel(m_card, text=label, width=180, anchor="w", font=ctk.CTkFont(size=12, weight="bold"))
-            lbl.pack(side="left", padx=15, pady=8)
-
-            prog = ctk.CTkProgressBar(m_card, width=400, height=18)
-            prog.set(0.0)
-            prog.pack(side="left", padx=15, fill="x", expand=True)
-
-            val_lbl = ctk.CTkLabel(m_card, text="1000 µs (OFF)", width=120, font=ctk.CTkFont(size=12))
-            val_lbl.pack(side="right", padx=15)
-
-            self.motor_bars[key] = (prog, val_lbl)
-
-    # -------------------------------------------------------------------------
-    # TAB 4: SENSORLESS BENCH TEST & HIL SIMULATION
-    # -------------------------------------------------------------------------
-    def _build_hil_tab(self):
-        parent = self.tab_hil
-
-        desc_frame = ctk.CTkFrame(parent)
-        desc_frame.pack(fill="x", padx=15, pady=10)
-
-        ctk.CTkLabel(desc_frame, text="Hardware-In-The-Loop (HIL) Sensor Simulation & Bench Test", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=15, pady=(10, 2))
-        ctk.CTkLabel(desc_frame, text="Inject synthetic flight dynamics to verify state machine transitions, apogee detection, 600m parachute deployment, and motor PID activation on the desk.", font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w", padx=15, pady=(0, 10))
-
-        # Simulation Mode Activation & 1-Click Bench Mode
-        ctrl_frame = ctk.CTkFrame(parent)
-        ctrl_frame.pack(fill="x", padx=15, pady=5)
-
-        btn_enable_sim = ctk.CTkButton(ctrl_frame, text="1. Enable HIL Simulation", fg_color="#2980b9", hover_color="#1f618d", command=lambda: self._send_command("CMD,1234,SIM,ENABLE\n"))
-        btn_enable_sim.pack(side="left", padx=10, pady=10)
-
-        btn_cal = ctk.CTkButton(ctrl_frame, text="2. Tare Ground Zero (CAL)", fg_color="#27ae60", hover_color="#1e8449", command=lambda: self._send_command("CMD,1234,CAL\n"))
-        btn_cal.pack(side="left", padx=5, pady=10)
-
-        btn_disable_sim = ctk.CTkButton(ctrl_frame, text="Disable Simulation", fg_color="#7f8c8d", hover_color="#626567", command=lambda: self._send_command("CMD,1234,SIM,DISABLE\n"))
-        btn_disable_sim.pack(side="left", padx=5, pady=10)
-
-        btn_abort = ctk.CTkButton(ctrl_frame, text="🛑 EMERGENCY ABORT", fg_color="#e74c3c", hover_color="#c0392b", font=ctk.CTkFont(weight="bold"), command=lambda: self._send_command("CMD,1234,ABORT\n"))
-        btn_abort.pack(side="right", padx=10, pady=10)
-
-        # Preset Flight Profiles
-        presets_frame = ctk.CTkFrame(parent)
-        presets_frame.pack(fill="x", padx=15, pady=10)
-
-        ctk.CTkLabel(presets_frame, text="Automated Flight Profile Injections:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
-
-        btn_box = ctk.CTkFrame(presets_frame, fg_color="transparent")
-        btn_box.pack(fill="x", padx=10, pady=5)
-
-        ctk.CTkButton(btn_box, text="🚀 Run Full Mission Simulation (0 ➔ 670m ➔ 0m)", fg_color="#8e44ad", hover_color="#732d91", font=ctk.CTkFont(weight="bold"), command=self._sim_launch_profile).pack(side="left", padx=5, pady=5)
-        ctk.CTkButton(btn_box, text="🎯 Test Live PID Stabilization (15%)", fg_color="#d35400", hover_color="#ba4a00", command=lambda: self._send_command("CMD,1234,PID,START,15\n")).pack(side="left", padx=5, pady=5)
-        ctk.CTkButton(btn_box, text="🪂 Trigger Parachute (State 4)", command=lambda: self._send_command("CMD,1234,SIMP,93500\n")).pack(side="left", padx=5, pady=5)
-        ctk.CTkButton(btn_box, text="🚁 Trigger Drone Hover (State 6)", command=lambda: self._send_command("CMD,1234,SIMP,98000\n")).pack(side="left", padx=5, pady=5)
-        ctk.CTkButton(btn_box, text="🏁 Trigger Touchdown (State 7)", command=lambda: self._send_command("CMD,1234,SIMP,101325\n")).pack(side="left", padx=5, pady=5)
-
-        # Manual Pressure & Altitude Slider
-        slider_frame = ctk.CTkFrame(parent)
-        slider_frame.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(slider_frame, text="Manual Altitude / Pressure Injection:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=15, pady=(10, 2))
-
-        self.alt_slider_val_lbl = ctk.CTkLabel(slider_frame, text="Injected Altitude: 0 m | Pressure: 101325 Pa", font=ctk.CTkFont(size=13, weight="bold"))
-        self.alt_slider_val_lbl.pack(pady=5)
-
-        self.alt_slider = ctk.CTkSlider(slider_frame, from_=0, to=1200, number_of_steps=120, command=self._on_alt_slider_change)
-        self.alt_slider.set(0)
-        self.alt_slider.pack(fill="x", padx=30, pady=10)
-
-        ctk.CTkButton(slider_frame, text="Inject Selected Pressure", width=200, command=self._inject_slider_pressure).pack(pady=5)
-
-    def _on_alt_slider_change(self, value):
-        alt = float(value)
-        pres = 101325.0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
-        self.alt_slider_val_lbl.configure(text=f"Injected Altitude: {alt:.1f} m | Calculated Pressure: {pres:.1f} Pa")
-
-    def _inject_slider_pressure(self):
-        alt = self.alt_slider.get()
-        pres = 101325.0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
-        self._send_command(f"CMD,1234,SIMP,{pres:.1f}\n")
-
-    def _action_enable_bench_mode(self):
-        if not self.is_connected:
-            messagebox.showwarning("Not Connected", "Please connect to the ESP32 serial port first.")
-            return
-
-        def run_bench():
-            self._send_command("set bit_override 1\n")
-            time.sleep(0.3)
-            self._send_command("reboot\n")
-
-        threading.Thread(target=run_bench, daemon=True).start()
-        messagebox.showinfo("Desk Test Mode", "Sensor check bypass command sent ('set bit_override 1').\nESP32 is rebooting into Desk Test Mode!")
-
-    def _action_restore_safety_mode(self):
-        if not self.is_connected:
-            messagebox.showwarning("Not Connected", "Please connect to the ESP32 serial port first.")
-            return
-
-        def run_safety():
-            self._send_command("set bit_override 0\n")
-            time.sleep(0.3)
-            self._send_command("reboot\n")
-
-        threading.Thread(target=run_safety, daemon=True).start()
-        messagebox.showinfo("Flight Safety Restored", "Safety check restored ('set bit_override 0').\nESP32 is rebooting in Flight Safe Mode!")
-
-    def _sim_launch_profile(self):
-        def run_sim():
-            self._send_command("CMD,1234,SIM,ENABLE\n")
-            time.sleep(0.3)
-            self._send_command("CMD,1234,CAL\n")
-            time.sleep(0.5)
-
-            p0 = 101325.0
-
-            # Phase 1: Ascent 0 -> 670m (State 3 ASCENT)
-            pcount = 0
-            for step in range(40):
-                frac = step / 40.0
-                pcount += 1
-                alt = 670.0 * (1.0 - math.cos(frac * math.pi / 2.0))
-                pres = p0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
-                pitch = 12.0 * math.sin(step * 0.4)
-                roll = 8.0 * math.cos(step * 0.3)
-                yaw = (step * 8.0) % 360.0
-
-                self._send_command(f"CMD,1234,SIMP,{pres:.1f}\n")
-                if telemetry_3d_server:
-                    telemetry_3d_server.update_telemetry(pitch=pitch, roll=roll, yaw=yaw, alt=alt, pres=pres, state=3, state_name="ASCENT", pcount=pcount)
-                self.after(0, lambda p=pitch, r=roll, y=yaw, a=alt, pr=pres: self._update_3d_tab_readouts(p, r, y, alt=a, pres=pr, state=3, state_str="ASCENT"))
-                time.sleep(0.12)
-
-            # Phase 2: Parachute Descent 670m -> 320m (State 4 PARACHUTE)
-            for step in range(25):
-                frac = step / 25.0
-                pcount += 1
-                alt = 670.0 - (670.0 - 320.0) * frac
-                pres = p0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
-                pitch = 18.0 * math.sin(step * 0.5)
-                roll = 22.0 * math.cos(step * 0.4)
-                yaw = (320.0 + step * 4.0) % 360.0
-
-                self._send_command(f"CMD,1234,SIMP,{pres:.1f}\n")
-                if telemetry_3d_server:
-                    telemetry_3d_server.update_telemetry(pitch=pitch, roll=roll, yaw=yaw, alt=alt, pres=pres, state=4, state_name="PARACHUTE", pcount=pcount)
-                self.after(0, lambda p=pitch, r=roll, y=yaw, a=alt, pr=pres: self._update_3d_tab_readouts(p, r, y, alt=a, pres=pr, state=4, state_str="PARACHUTE"))
-                time.sleep(0.12)
-
-            # Phase 3: Drone Hover & Final Descent 320m -> 0m (State 6 DRONE_HOVER)
-            for step in range(40):
-                frac = step / 40.0
-                pcount += 1
-                alt = 320.0 - (320.0 - 0.0) * frac
-                pres = p0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
-                pitch = 5.0 * math.sin(step * 0.8)
-                roll = 6.0 * math.cos(step * 0.7)
-                yaw = (step * 3.0) % 360.0
-
-                self._send_command(f"CMD,1234,SIMP,{pres:.1f}\n")
-                if telemetry_3d_server:
-                    telemetry_3d_server.update_telemetry(pitch=pitch, roll=roll, yaw=yaw, alt=alt, pres=pres, state=6, state_name="DRONE_HOVER", pcount=pcount)
-                self.after(0, lambda p=pitch, r=roll, y=yaw, a=alt, pr=pres: self._update_3d_tab_readouts(p, r, y, alt=a, pres=pr, state=6, state_str="DRONE_HOVER"))
-                time.sleep(0.12)
-
-            # Phase 4: Landed (State 7 LANDED)
-            for _ in range(5):
-                pcount += 1
-                self._send_command(f"CMD,1234,SIMP,{p0:.1f}\n")
-                if telemetry_3d_server:
-                    telemetry_3d_server.update_telemetry(pitch=0.0, roll=0.0, yaw=0.0, alt=0.0, pres=p0, state=7, state_name="LANDED", pcount=pcount)
-                self.after(0, lambda: self._update_3d_tab_readouts(0, 0, 0, alt=0.0, pres=p0, state=7, state_str="LANDED"))
-                time.sleep(0.2)
-
-        threading.Thread(target=run_sim, daemon=True).start()
-
-    # -------------------------------------------------------------------------
-    # TAB 5: SERIAL TERMINAL
-    # -------------------------------------------------------------------------
-    def _build_terminal_tab(self):
-        parent = self.tab_terminal
-
-        self.term_txt = ctk.CTkTextbox(parent, font=("Consolas", 11), wrap="char")
-        self.term_txt.pack(fill="both", expand=True, padx=15, pady=(10, 5))
-
-        cmd_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        cmd_frame.pack(fill="x", padx=15, pady=(0, 10))
-
-        self.term_input = ctk.CTkEntry(cmd_frame, placeholder_text="Enter CLI command (e.g. tasks, bit, cal, help)...")
-        self.term_input.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.term_input.bind("<Return>", lambda e: self._send_terminal_input())
-        if hasattr(self.term_input, "_entry"):
-            self.term_input._entry.bind("<Return>", lambda e: self._send_terminal_input())
-
-        btn_send = ctk.CTkButton(cmd_frame, text="Send", width=90, command=self._send_terminal_input)
-        btn_send.pack(side="right")
-
-        btn_clear = ctk.CTkButton(cmd_frame, text="Clear", width=70, fg_color="#7f8c8d", hover_color="#626567", command=lambda: self.term_txt.delete("1.0", "end"))
-        btn_clear.pack(side="right", padx=5)
-
-    def _append_term_text(self, text):
-        try:
-            self.term_txt.insert("end", text)
-            try:
-                line_count = int(self.term_txt.index("end-1c").split('.')[0])
-                if line_count > 1500:
-                    self.term_txt.delete("1.0", "300.0")
             except Exception:
                 pass
-            self.term_txt.see("end")
+        self.after(25, self._pump)
+        self.after(500, self._tick)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ------------------------------------------------------------------ settings
+    def _load_settings(self):
+        try:
+            with open(SETTINGS_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"transport": "USB", "port": "", "log_dir": os.path.expanduser("~")}
+
+    def _save_settings(self):
+        try:
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.settings, f)
         except Exception:
             pass
 
-    def _send_terminal_input(self):
-        text = self.term_input.get()
-        if text:
-            self._send_command(text + "\n")
-            self.term_input.delete(0, "end")
+    # ------------------------------------------------------------------ layout
+    def _build_header(self):
+        h = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=0, height=56, border_width=0)
+        h.pack(fill="x", side="top")
+        h.pack_propagate(False)
+        ctk.CTkFrame(self, fg_color=C["line"], height=1, corner_radius=0).pack(fill="x", side="top")
 
-    # -------------------------------------------------------------------------
-    # SERIAL & PROTOCOL HANDLING
-    # -------------------------------------------------------------------------
-    def _get_available_ports(self):
-        ports = [p.device for p in serial.tools.list_ports.comports()]
-        return ports if ports else ["No Ports Found"]
+        brand = ctk.CTkFrame(h, fg_color="transparent")
+        brand.pack(side="left", padx=(20, 0))
+        ctk.CTkLabel(brand, text="Aakashvani", font=font(17, "semi"), text_color=C["text"]).pack(side="left")
+        ctk.CTkLabel(brand, text="Ground Station", font=font(13), text_color=C["muted"]).pack(side="left", padx=(8, 0), pady=(3, 0))
+
+        right = ctk.CTkFrame(h, fg_color="transparent")
+        right.pack(side="right", padx=16)
+        self.link_dot = Dot(right, 10)
+        self.link_text = ctk.CTkLabel(right, text="Not connected", font=font(12), text_color=C["muted"])
+        self.transport = ctk.CTkSegmentedButton(right, values=["USB", "Bluetooth"], font=font(12, "med"),
+                                                selected_color="#343C48", selected_hover_color="#3B4451",
+                                                unselected_color=C["panel"], unselected_hover_color=C["hover"],
+                                                fg_color=C["panel"], text_color=C["text"], height=32,
+                                                command=lambda v: self._on_transport(v))
+        self.transport.set(self.settings.get("transport", "USB"))
+        self.port_menu = ctk.CTkOptionMenu(right, values=self._ports(), width=150, height=32, font=font(12),
+                                           fg_color=C["raised"], button_color=C["raised"], button_hover_color=C["hover"],
+                                           dropdown_fg_color=C["raised"], dropdown_font=font(12))
+        self.refresh_btn = ctk.CTkButton(right, text="", image=icon("refresh", 15), width=32, height=32,
+                                         fg_color=C["raised"], hover_color=C["hover"], border_width=1,
+                                         border_color=C["line"], command=self._refresh_ports)
+        self.connect_btn = button(right, "Connect", self._toggle_link, "primary", "plug", width=120)
+        for w in (self.connect_btn, self.refresh_btn, self.port_menu, self.transport):
+            w.pack(side="right", padx=(8, 0))
+        self.link_text.pack(side="right", padx=(0, 14))
+        self.link_dot.pack(side="right", padx=(0, 8))
+        self._refresh_ports()
+        self._on_transport(self.transport.get())
+
+    def _build_body(self):
+        body = ctk.CTkFrame(self, fg_color=C["bg"], corner_radius=0)
+        body.pack(fill="both", expand=True)
+
+        nav = ctk.CTkFrame(body, fg_color=C["panel"], corner_radius=0, width=196)
+        nav.pack(side="left", fill="y")
+        nav.pack_propagate(False)
+        ctk.CTkFrame(body, fg_color=C["line"], width=1, corner_radius=0).pack(side="left", fill="y")
+
+        self.pages, self.nav_buttons = {}, {}
+        items = [("overview", "Overview"), ("attitude", "Attitude"), ("health", "Health"),
+                 ("log", "Flight log"), ("bench", "Bench"), ("console", "Console"), ("firmware", "Firmware")]
+        ctk.CTkLabel(nav, text="", height=8).pack()
+        for key, label in items:
+            b = ctk.CTkButton(nav, text=label, anchor="w", height=38, corner_radius=7, font=font(13, "med"),
+                              fg_color="transparent", hover_color=C["hover"], text_color=C["muted"],
+                              image=icon(key, 17), compound="left", command=lambda k=key: self.show(k))
+            b.pack(fill="x", padx=10, pady=1)
+            self.nav_buttons[key] = b
+
+        self.content = ctk.CTkFrame(body, fg_color=C["bg"], corner_radius=0)
+        self.content.pack(side="left", fill="both", expand=True)
+        for key, _ in items:
+            page = ctk.CTkFrame(self.content, fg_color=C["bg"], corner_radius=0)
+            self.pages[key] = page
+            getattr(self, f"_page_{key}")(page)
+
+    def _build_statusbar(self):
+        ctk.CTkFrame(self, fg_color=C["line"], height=1, corner_radius=0).pack(fill="x", side="bottom")
+        sb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=0, height=28)
+        sb.pack(fill="x", side="bottom")
+        sb.pack_propagate(False)
+        self.sb_items = {}
+        for key in ("mtime", "pkts", "rate", "log", "note"):
+            lbl = ctk.CTkLabel(sb, text="", font=font(11, "mono"), text_color=C["muted"])
+            lbl.pack(side="left", padx=(16, 8))
+            self.sb_items[key] = lbl
+
+    def show(self, key):
+        for k, p in self.pages.items():
+            p.pack_forget()
+        self.pages[key].pack(fill="both", expand=True, padx=22, pady=18)
+        for k, b in self.nav_buttons.items():
+            active = (k == key)
+            b.configure(fg_color=C["raised"] if active else "transparent",
+                        text_color=C["text"] if active else C["muted"],
+                        image=icon(k, 17, C["accent"] if active else C["muted"]))
+
+    def _page_title(self, page, title, subtitle):
+        ctk.CTkLabel(page, text=title, font=font(20, "semi"), text_color=C["text"]).pack(anchor="w")
+        ctk.CTkLabel(page, text=subtitle, font=font(12), text_color=C["muted"]).pack(anchor="w", pady=(0, 14))
+
+    # ------------------------------------------------------------------ pages
+    def _page_overview(self, page):
+        self._page_title(page, "Mission", "Live phase, altitude and return-to-launch status")
+        rail_card = Card(page)
+        rail_card.pack(fill="x")
+        self.rail = PhaseRail(rail_card)
+        self.rail.pack(fill="x", padx=12, pady=10)
+
+        row = ctk.CTkFrame(page, fg_color="transparent")
+        row.pack(fill="x", pady=12)
+        self.ov = {}
+        for i, (key, label, unit) in enumerate([("agl", "Altitude above pad", "m"), ("v", "Vertical speed", "m/s"),
+                                                 ("peak", "Peak", "m"), ("mtime", "Time since power-on", "")]):
+            card = Card(row)
+            card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 6, 0))
+            row.grid_columnconfigure(i, weight=1)
+            m = Metric(card, label, unit, 28)
+            m.pack(anchor="w", padx=16, pady=14)
+            self.ov[key] = m
+
+        lower = ctk.CTkFrame(page, fg_color="transparent")
+        lower.pack(fill="both", expand=True)
+        lower.grid_columnconfigure(0, weight=3)
+        lower.grid_columnconfigure(1, weight=2)
+        lower.grid_rowconfigure(0, weight=1)
+
+        chart = Card(lower, "Altitude, last 2 minutes")
+        chart.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        if HAVE_MPL:
+            fig = Figure(figsize=(6, 3), dpi=100, facecolor=C["panel"])
+            self.ax = fig.add_subplot(111)
+            self._style_axes(self.ax)
+            self.alt_line, = self.ax.plot([], [], color=C["accent"], linewidth=1.6)
+            fig.subplots_adjust(left=0.09, right=0.98, top=0.95, bottom=0.14)
+            self.alt_canvas = FigureCanvasTkAgg(fig, master=chart)
+            self.alt_canvas.get_tk_widget().configure(bg=C["panel"], highlightthickness=0)
+            self.alt_canvas.get_tk_widget().pack(fill="both", expand=True, padx=8, pady=8)
+
+        side = ctk.CTkFrame(lower, fg_color="transparent")
+        side.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        ret = Card(side, "Return to launch")
+        ret.pack(fill="x")
+        self.ret = {k: Row(ret, l) for k, l in [("dist", "Distance to site"), ("brg", "Bearing"), ("sats", "Satellites"),
+                                                  ("tilt", "Tilt command"), ("arms", "Drone arms"), ("esc", "Motors")]}
+        for r in self.ret.values():
+            r.pack(fill="x", padx=16, pady=3)
+        ctk.CTkLabel(ret, text="", height=6).pack()
+        ev = Card(side, "Events")
+        ev.pack(fill="both", expand=True, pady=(12, 0))
+        self.event_box = ctk.CTkTextbox(ev, fg_color=C["panel"], text_color=C["text"], font=font(11, "mono"),
+                                        border_width=0, wrap="word", activate_scrollbars=True)
+        self.event_box.pack(fill="both", expand=True, padx=10, pady=(4, 10))
+        self.event_box.insert("end", "Waiting for the flight computer.\n")
+        self.event_box.configure(state="disabled")
+
+    def _page_attitude(self, page):
+        self._page_title(page, "Attitude", "Orientation from the BNO055 quaternion (gimbal-lock free)")
+        top = ctk.CTkFrame(page, fg_color="transparent")
+        top.pack(fill="x")
+        hc = Card(top, "Horizon")
+        hc.pack(side="left", padx=(0, 12))
+        self.horizon = Horizon(hc, 230)
+        self.horizon.pack(padx=16, pady=14)
+        self.horizon.set(0, 0)
+
+        nums = Card(top, "Angles")
+        nums.pack(side="left", fill="both", expand=True)
+        grid = ctk.CTkFrame(nums, fg_color="transparent")
+        grid.pack(fill="x", padx=16, pady=14)
+        self.att = {}
+        for i, (k, l) in enumerate([("p", "Tilt X (pitch)"), ("r", "Tilt Y (roll)"), ("y", "Heading")]):
+            m = Metric(grid, l, "deg", 30)
+            m.grid(row=0, column=i, sticky="w", padx=(0, 36))
+            self.att[k] = m
+        self.att_rows = {k: Row(nums, l) for k, l in [("mount", "Sensor mount (auto-detected)"), ("rate", "Attitude stream"),
+                                                        ("mcu", "Flight computer clock")]}
+        for r in self.att_rows.values():
+            r.pack(fill="x", padx=16, pady=3)
+
+        act = Card(page, "Tools")
+        act.pack(fill="x", pady=12)
+        bar = ctk.CTkFrame(act, fg_color="transparent")
+        bar.pack(fill="x", padx=16, pady=(8, 14))
+        button(bar, "3D view", self._open_3d, "normal", "box").pack(side="left")
+        button(bar, "3D view in browser", lambda: __import__("webbrowser").open("http://localhost:8055/"), "quiet", "layers").pack(side="left", padx=8)
+        button(bar, "Re-reference", self._tare, "normal", "crosshair").pack(side="left", padx=(24, 0))
+        button(bar, "Calibrate north", self._north, "normal", "compass").pack(side="left", padx=8)
+        ctk.CTkLabel(act, text="Re-reference and north calibration only work on the pad; the reference is locked once a flight starts.",
+                     font=font(11), text_color=C["faint"]).pack(anchor="w", padx=16, pady=(0, 12))
+
+    def _page_health(self, page):
+        self._page_title(page, "Health", "One glance before flight. Works over USB or Bluetooth")
+        grid = ctk.CTkFrame(page, fg_color="transparent")
+        grid.pack(fill="x")
+        self.tiles = {}
+        specs = [("imu", "IMU", "activity"), ("baro", "Barometer", "gauge"), ("gnss", "GNSS", "satellite"),
+                 ("bat", "Battery", "battery"), ("mem", "Free memory", "cpu"), ("log", "Flight log", "drive"),
+                 ("temp", "Board temperature", "thermo"), ("link", "Bluetooth", "ble")]
+        for i, (k, label, ic) in enumerate(specs):
+            card = Card(grid)
+            card.grid(row=i // 4, column=i % 4, sticky="nsew", padx=(0 if i % 4 == 0 else 6, 0), pady=(0, 12))
+            grid.grid_columnconfigure(i % 4, weight=1)
+            head = ctk.CTkFrame(card, fg_color="transparent")
+            head.pack(fill="x", padx=16, pady=(14, 0))
+            ctk.CTkLabel(head, text="", image=icon(ic, 16)).pack(side="left")
+            ctk.CTkLabel(head, text=label, font=font(12), text_color=C["muted"]).pack(side="left", padx=(8, 0))
+            dot = Dot(head, 9)
+            dot.pack(side="right")
+            val = ctk.CTkLabel(card, text="--", font=font(20, "monomed"), text_color=C["text"])
+            val.pack(anchor="w", padx=16, pady=(6, 0))
+            sub = ctk.CTkLabel(card, text="", font=font(11), text_color=C["faint"])
+            sub.pack(anchor="w", padx=16, pady=(0, 14))
+            self.tiles[k] = (dot, val, sub)
+
+        lower = ctk.CTkFrame(page, fg_color="transparent")
+        lower.pack(fill="both", expand=True)
+        lower.grid_columnconfigure(0, weight=1)
+        lower.grid_columnconfigure(1, weight=1)
+        selft = Card(lower, "Self test")
+        selft.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        self.bit_label = ctk.CTkLabel(selft, text="No data yet", font=font(12), text_color=C["muted"], justify="left")
+        self.bit_label.pack(anchor="w", padx=16, pady=(8, 6))
+        self.crash_label = ctk.CTkLabel(selft, text="", font=font(12), text_color=C["muted"], justify="left")
+        self.crash_label.pack(anchor="w", padx=16, pady=(0, 14))
+        envc = Card(lower, "Environment")
+        envc.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        self.env_rows = {k: Row(envc, l) for k, l in [("t", "Air temperature"), ("rh", "Relative humidity"),
+                                                        ("voc", "VOC index"), ("nox", "NOx index"), ("p", "Pressure")]}
+        for r in self.env_rows.values():
+            r.pack(fill="x", padx=16, pady=3)
+        ctk.CTkLabel(envc, text="", height=6).pack()
+
+    def _page_log(self, page):
+        self._page_title(page, "Flight log", "The on-board recorder keeps 50 Hz flight data in 12 MB of internal flash")
+        bar = ctk.CTkFrame(page, fg_color="transparent")
+        bar.pack(fill="x", pady=(0, 10))
+        button(bar, "Refresh list", self._log_list, "normal", "refresh").pack(side="left")
+        button(bar, "Download selected", self._log_download, "primary", "download").pack(side="left", padx=8)
+        button(bar, "Crash report", self._crash_report, "quiet", "alert").pack(side="left", padx=(16, 0))
+        button(bar, "Erase log", self._log_erase, "danger", "trash").pack(side="right")
+        gc = Card(page, "Ground telemetry file (for the judges)")
+        gc.pack(fill="x", pady=(0, 12))
+        gr = ctk.CTkFrame(gc, fg_color="transparent")
+        gr.pack(fill="x", padx=16, pady=(6, 14))
+        self.tm_label = ctk.CTkLabel(gr, text="", font=font(12, "mono"), text_color=C["text"], anchor="w", justify="left")
+        self.tm_label.pack(side="left", fill="x", expand=True)
+        button(gr, "Open folder", self._tm_open_folder, "quiet", "drive").pack(side="right")
+        button(gr, "Start fresh file", self._tm_archive, "quiet", "refresh").pack(side="right", padx=8)
+        lc = Card(page, "On-board recorder sessions (newest first)")
+        lc.pack(fill="both", expand=True)
+        self.log_list = tk.Listbox(lc, bg=C["panel"], fg=C["text"], selectbackground=C["raised"],
+                                   selectforeground=C["accent"], highlightthickness=0, borderwidth=0,
+                                   font=(MONO, 10), activestyle="none")
+        self.log_list.pack(fill="both", expand=True, padx=14, pady=10)
+        self.log_status = ctk.CTkLabel(page, text="Connect over USB, then refresh.", font=font(11), text_color=C["muted"])
+        self.log_status.pack(anchor="w", pady=(8, 0))
+
+    def _page_bench(self, page):
+        self._page_title(page, "Bench", "Calibration and tests on the ground. Actuator tests need USB and props off")
+        cols = ctk.CTkFrame(page, fg_color="transparent")
+        cols.pack(fill="both", expand=True)
+        cols.grid_columnconfigure(0, weight=1)
+        cols.grid_columnconfigure(1, weight=1)
+
+        g = Card(cols, "Ground")
+        g.grid(row=0, column=0, sticky="nsew", padx=(0, 6), pady=(0, 12))
+        b = ctk.CTkFrame(g, fg_color="transparent")
+        b.pack(fill="x", padx=16, pady=(8, 14))
+        button(b, "Zero altitude", lambda: self._send("CAL"), "normal", "mountain").pack(side="left")
+        button(b, "Reset mission clock", lambda: self._send("ST,00:00:00"), "quiet").pack(side="left", padx=8)
+        self.stream_switch = ctk.CTkSwitch(b, text="Radio telemetry (CX)", font=font(12), progress_color=C["accent"],
+                                           command=lambda: self._send("CX," + ("ON" if self.stream_switch.get() else "OFF")))
+        self.stream_switch.pack(side="right")
+
+        lt = Card(cols, "Lift test")
+        lt.grid(row=0, column=1, sticky="nsew", padx=(6, 0), pady=(0, 12))
+        ctk.CTkLabel(lt, text="Runs the whole mission at building scale. Motors stay inhibited.",
+                     font=font(11), text_color=C["faint"]).pack(anchor="w", padx=16, pady=(6, 0))
+        r = ctk.CTkFrame(lt, fg_color="transparent")
+        r.pack(fill="x", padx=16, pady=(8, 14))
+        ctk.CTkLabel(r, text="Open arms at", font=font(12), text_color=C["muted"]).pack(side="left")
+        self.lift_entry = ctk.CTkEntry(r, width=56, height=32, font=font(12, "mono"), fg_color=C["raised"], border_color=C["line"])
+        self.lift_entry.insert(0, "10")
+        self.lift_entry.pack(side="left", padx=6)
+        ctk.CTkLabel(r, text="m", font=font(12), text_color=C["muted"]).pack(side="left")
+        button(r, "Stop", lambda: self._send("LIFT,OFF"), "quiet").pack(side="right")
+        button(r, "Start", lambda: self._send(f"LIFT,{self.lift_entry.get().strip() or '10'}"), "normal", "play").pack(side="right", padx=6)
+
+        sm = Card(cols, "Simulated flight")
+        sm.grid(row=1, column=0, sticky="nsew", padx=(0, 6), pady=(0, 12))
+        ctk.CTkLabel(sm, text="Feeds a pressure profile to the real firmware (hardware in the loop).",
+                     font=font(11), text_color=C["faint"]).pack(anchor="w", padx=16, pady=(6, 0))
+        r2 = ctk.CTkFrame(sm, fg_color="transparent")
+        r2.pack(fill="x", padx=16, pady=(8, 14))
+        self.sim_profile = ctk.CTkOptionMenu(r2, values=["Carrier drone to 750 m", "Lift, 10 floors"], width=200, height=32,
+                                             font=font(12), fg_color=C["raised"], button_color=C["raised"],
+                                             button_hover_color=C["hover"], dropdown_fg_color=C["raised"])
+        self.sim_profile.pack(side="left")
+        self.sim_btn = button(r2, "Run", self._sim_toggle, "normal", "play", width=90)
+        self.sim_btn.pack(side="left", padx=8)
+
+        ac = Card(cols, "Actuators (props off)")
+        ac.grid(row=1, column=1, sticky="nsew", padx=(6, 0), pady=(0, 12))
+        r3 = ctk.CTkFrame(ac, fg_color="transparent")
+        r3.pack(fill="x", padx=16, pady=(8, 4))
+        ctk.CTkLabel(r3, text="Throttle", font=font(12), text_color=C["muted"]).pack(side="left")
+        self.mtr_slider = ctk.CTkSlider(r3, from_=0, to=25, number_of_steps=25, width=150, progress_color=C["accent"],
+                                        button_color=C["text"], button_hover_color=C["accent"])
+        self.mtr_slider.set(8)
+        self.mtr_slider.pack(side="left", padx=8)
+        self.mtr_value = ctk.CTkLabel(r3, text="8 %", font=font(12, "mono"), text_color=C["text"], width=40)
+        self.mtr_value.pack(side="left")
+        self.mtr_slider.configure(command=lambda v: self.mtr_value.configure(text=f"{int(v)} %"))
+        r4 = ctk.CTkFrame(ac, fg_color="transparent")
+        r4.pack(fill="x", padx=16, pady=(4, 6))
+        for i, name in enumerate(["M1", "M2", "M3", "M4", "All"]):
+            button(r4, name, lambda i=i: self._motor_test(i if i < 4 else -1), "normal", width=52).pack(side="left", padx=(0, 6))
+        r5 = ctk.CTkFrame(ac, fg_color="transparent")
+        r5.pack(fill="x", padx=16, pady=(4, 14))
+        button(r5, "Open arm latches", self._unlatch, "normal", "lock_open").pack(side="left")
+        button(r5, "Abort motors", lambda: self._send("ABORT"), "danger", "x").pack(side="right")
+
+    def _page_console(self, page):
+        self._page_title(page, "Console", "Everything the flight computer prints")
+        bar = ctk.CTkFrame(page, fg_color="transparent")
+        bar.pack(fill="x", pady=(0, 8))
+        self.show_telem = ctk.CTkSwitch(bar, text="Show telemetry lines", font=font(12), progress_color=C["accent"])
+        self.show_telem.pack(side="left")
+        button(bar, "Clear", lambda: self._console_clear(), "quiet").pack(side="right")
+        self.console = ctk.CTkTextbox(page, fg_color=C["panel"], text_color=C["text"], font=font(11, "mono"),
+                                      border_width=1, border_color=C["line"], corner_radius=10, wrap="none")
+        self.console.pack(fill="both", expand=True)
+        entry_row = ctk.CTkFrame(page, fg_color="transparent")
+        entry_row.pack(fill="x", pady=(8, 0))
+        self.cmd_entry = ctk.CTkEntry(entry_row, height=36, font=font(12, "mono"), fg_color=C["panel"], border_color=C["line"],
+                                      placeholder_text="CMD,001,...  or a console command (status, help)")
+        self.cmd_entry.pack(side="left", fill="x", expand=True)
+        self.cmd_entry.bind("<Return>", lambda e: self._console_send())
+        self.cmd_entry.bind("<Up>", lambda e: self._history(-1))
+        self.cmd_entry.bind("<Down>", lambda e: self._history(1))
+        button(entry_row, "Send", self._console_send, "normal", "send", width=90).pack(side="left", padx=(8, 0))
+        self.history, self.hist_i = [], 0
+
+    def _page_firmware(self, page):
+        self._page_title(page, "Firmware", "Flashes build/ over USB with esptool (disconnects the link first)")
+        bar = ctk.CTkFrame(page, fg_color="transparent")
+        bar.pack(fill="x", pady=(0, 10))
+        button(bar, "Flash firmware", self._flash, "primary", "upload").pack(side="left")
+        button(bar, "Identify chip", self._chip_id, "normal", "cpu").pack(side="left", padx=8)
+        button(bar, "Erase entire flash", self._erase_flash, "danger", "trash").pack(side="right")
+        self.flash_box = ctk.CTkTextbox(page, fg_color=C["panel"], text_color=C["muted"], font=font(11, "mono"),
+                                        border_width=1, border_color=C["line"], corner_radius=10)
+        self.flash_box.pack(fill="both", expand=True)
+
+    # ------------------------------------------------------------------ links
+    def _ports(self):
+        ports = [p.device for p in serial.tools.list_ports.comports() if "bluetooth" not in (p.description or "").lower()]
+        return ports or ["No USB port"]
 
     def _refresh_ports(self):
-        ports = self._get_available_ports()
-        self.port_combo.configure(values=ports)
-        if "COM15" in ports:
-            self.port_combo.set("COM15")
-        elif ports and ports[0] != "No Ports Found":
-            self.port_combo.set(ports[0])
+        ports = self._ports()
+        self.port_menu.configure(values=ports)
+        want = self.settings.get("port")
+        self.port_menu.set(want if want in ports else ports[0])
 
-    def _toggle_connection(self):
-        if not self.is_connected:
-            port = self.port_combo.get()
-            baud = int(self.baud_combo.get())
-            if not port or port == "No Ports Found":
-                messagebox.showerror("Error", "No valid serial COM port selected.")
-                return
-
-            try:
-                self.ser = serial.Serial()
-                self.ser.port = port
-                self.ser.baudrate = baud
-                self.ser.timeout = 0.1
-                self.ser.write_timeout = 0.5
-                self.ser.dtr = False
-                self.ser.rts = False
-                self.ser.open()
-                self.is_connected = True
-                self.att_last_rx = 0.0
-                self.stop_serial.clear()
-                self.serial_thread = threading.Thread(target=self._serial_read_loop, daemon=True)
-                self.serial_thread.start()
-
-                self.connect_btn.configure(text="Disconnect", fg_color="#e74c3c", hover_color="#c0392b")
-                self.status_lbl.configure(text=f"Status: Connected to {port} @ {baud} baud", text_color="#2ecc71")
-            except Exception as e:
-                messagebox.showerror("Connection Failed", f"Could not open {port}:\n{str(e)}")
+    def _on_transport(self, value):
+        self.settings["transport"] = value
+        if value == "USB":
+            self.port_menu.configure(state="normal")
+            self.refresh_btn.configure(state="normal")
         else:
-            self._disconnect_serial()
+            self.port_menu.configure(state="disabled")
+            self.refresh_btn.configure(state="disabled")
 
-    def _disconnect_serial(self):
-        self.stop_serial.set()
-        if self.ser and self.ser.is_open:
-            try:
-                self.ser.close()
-            except Exception:
-                pass
-        self.is_connected = False
-        self.connect_btn.configure(text="Connect", fg_color="#2ecc71", hover_color="#27ae60")
-        self.status_lbl.configure(text="Status: Disconnected", text_color="gray")
-
-    def _serial_read_loop(self):
-        while not self.stop_serial.is_set():
-            if self.ser and self.ser.is_open:
-                try:
-                    line = self.ser.readline().decode("utf-8", errors="replace")
-                    if line:
-                        if ",ATT," in line[:12]:
-                            # Attitude goes straight to the 3D stream from this thread so the
-                            # Tk event loop can never add latency or jitter to the motion.
-                            self._handle_att_line(line)
-                        else:
-                            self.serial_rx_queue.put(line)
-                except Exception:
-                    time.sleep(0.02)
-            else:
-                time.sleep(0.05)
-
-    def _handle_att_line(self, line):
-        """1234,ATT,<mcu_ms>,<qw>,<qx>,<qy>,<qz>,<tilt_x>,<tilt_y>,<rot_z>,<mount>,<ref_count>"""
-        parts = line.strip().split(",")
-        if len(parts) < 11:
+    def _toggle_link(self):
+        if self.link:
+            self.link.stop()
+            self.link = None
+            self._set_link_status("idle", "Not connected")
             return
         try:
-            mcu_ms = int(parts[2])
-            q = (float(parts[3]), float(parts[4]), float(parts[5]), float(parts[6]))
-            mount = int(parts[10])
+            if self.transport.get() == "USB":
+                port = self.port_menu.get()
+                if port.startswith("No "):
+                    return
+                self.settings["port"] = port
+                self.link = SerialLink(port, self._on_line, self._link_status_threadsafe)
+            else:
+                self.link = BleLink(self._on_line, self._link_status_threadsafe)
+            self.link.start()
+            self._save_settings()
+            self.connect_btn.configure(text="Disconnect", image=icon("x", 15, C["text"]), fg_color=C["raised"],
+                                       hover_color=C["hover"], text_color=C["text"], border_width=1, border_color=C["line"])
+        except Exception as e:
+            self.link = None
+            messagebox.showerror("Connection failed", str(e))
+
+    def _link_status_threadsafe(self, state, text):
+        self.rx.put(("status", state, text))
+
+    def _set_link_status(self, state, text):
+        color = {"connected": C["ok"], "busy": C["warn"], "lost": C["bad"]}.get(state, C["faint"])
+        self.link_dot.set(color)
+        self.link_text.configure(text=text, text_color=C["text"] if state == "connected" else C["muted"])
+        if state in ("idle", "lost"):
+            if state == "lost" and self.link:
+                self.link.stop()
+                self.link = None
+            self.connect_btn.configure(text="Connect", image=icon("plug", 15, "#1A1205"), fg_color=C["accent"],
+                                       hover_color="#D18E2C", text_color="#1A1205", border_width=0)
+
+    def _send(self, cmd, raw=False):
+        if not self.link:
+            self._note("Not connected")
+            return False
+        line = cmd if raw or cmd.upper().startswith("CMD,") or " " in cmd or cmd.lower() in ("status", "help") \
+            else f"CMD,{TEAM},{cmd}"
+        if self.link.kind == "ble" and any(f",{b}" in line.upper() or line.upper().startswith(b) for b in BLE_BLOCKED):
+            self._note("That command needs the USB link")
+            return False
+        self._console_add(f"> {line}\n", C["accent"])
+        return self.link.send(line)
+
+    # ------------------------------------------------------------------ RX path
+    def _on_line(self, line):
+        """Called from the link thread."""
+        if not line:
+            return
+        self._rx_count += 1
+        cap = self.capture
+        if cap is not None:
+            kind, end, lines = cap
+            if line.startswith(("LOG", "CRASH")):
+                lines.append(line)
+                if line.startswith(end):
+                    self.capture = None
+                    self.rx.put(("capture", kind, lines))
+                return
+        if ",ATT," in line[:12]:
+            self._att_fast(line)
+            return
+        self.rx.put(("line", line))
+
+    def _att_fast(self, line):
+        p = line.split(",")
+        if len(p) < 11:
+            return
+        try:
+            q = (float(p[3]), float(p[4]), float(p[5]), float(p[6]))
+            mcu, mount = int(p[2]), int(p[10])
         except ValueError:
             return
-        if abs(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3] - 1.0) > 0.05:
-            return
-        now = time.time()
-        self.q_raw = q
-        self.att_last_rx = now
-        self.att_mcu_ms = mcu_ms
-        self.att_count += 1
-        self.mount_name = MOUNT_NAMES.get(mount, f"code {mount}")
-        q_disp = apply_tare(self.q_tare, q)
+        self._att_count += 1
         if telemetry_3d_server:
-            telemetry_3d_server.update_telemetry(q=q_disp, t_mcu=mcu_ms, mount_name=self.mount_name)
-        # UI readouts at most 20 Hz (Tk thread)
-        if now - getattr(self, "_last_att_ui", 0.0) >= 0.05:
-            self._last_att_ui = now
-            self.serial_rx_queue.put(("ATT", q_disp))
-
-    def _send_command(self, cmd_str):
-        if not self.is_connected or not self.ser or not self.ser.is_open:
-            messagebox.showwarning("Not Connected", "Please connect to the serial port first.")
-            return
-
-        # Echo command to terminal immediately on the main GUI thread
-        self._append_term_text(f">>> {cmd_str}")
-
-        def do_write():
-            try:
-                if self.ser and self.ser.is_open:
-                    self.ser.write(cmd_str.encode("utf-8", errors="replace"))
-            except Exception as e:
-                self.serial_rx_queue.put(f"ERR: Failed to send command: {e}\n")
-
-        threading.Thread(target=do_write, daemon=True).start()
-
-    def _process_serial_queue(self):
-        while not self.serial_rx_queue.empty():
-            item = self.serial_rx_queue.get_nowait()
-            if isinstance(item, tuple):
-                self._apply_att_ui(item[1])
-            else:
-                self._handle_incoming_line(item)
-        self.after(10, self._process_serial_queue)
-
-    def _apply_att_ui(self, q_disp):
-        p, r, y = euler_zxy(q_disp)
-        self._update_3d_tab_readouts(p, r, y)
-        if hasattr(self, "metric_labels"):
-            self.metric_labels["tilt"].configure(text=f"{p:.1f}°, {r:.1f}°")
-            self.metric_labels["rotz"].configure(text=f"{y:.1f}°")
+            telemetry_3d_server.update_telemetry(q=q, t_mcu=mcu, mount_name=MOUNTS.get(mount, "?"))
         now = time.time()
-        if now - self._att_rate_t0 >= 1.0:
-            self.att_rate_hz = self.att_count / (now - self._att_rate_t0)
-            self.att_count = 0
-            self._att_rate_t0 = now
-            if hasattr(self, "lbl_mount"):
-                self.lbl_mount.configure(text=self.mount_name)
-                self.lbl_att_link.configure(
-                    text=f"Attitude stream: {self.att_rate_hz:.0f} Hz | MCU t = {self.att_mcu_ms / 1000.0:.2f} s")
+        if now - self._last_att_ui > 0.05:
+            self._last_att_ui = now
+            self.rx.put(("att", q, mcu, mount))
 
-    def _att_stream_active(self):
-        return (time.time() - self.att_last_rx) < 0.5
+    def _pump(self):
+        n = 0
+        while n < 400:
+            try:
+                msg = self.rx.get_nowait()
+            except queue.Empty:
+                break
+            n += 1
+            kind = msg[0]
+            if kind == "line":
+                self._handle_line(msg[1])
+            elif kind == "att":
+                self._handle_att(*msg[1:])
+            elif kind == "status":
+                self._set_link_status(msg[1], msg[2])
+            elif kind == "capture":
+                self._handle_capture(msg[1], msg[2])
+        self.after(25, self._pump)
 
-    def _handle_env_line(self, line):
+    def _handle_line(self, line):
+        self._last_line_t = time.time()
+        p = line.split(",")
+        telem = False
+        if len(p) > 2 and p[0] == TEAM:
+            tag = p[1]
+            telem = True
+            if tag == "MSN" and len(p) >= 15:
+                self._on_msn(p)
+            elif tag == "HLT" and len(p) >= 16:
+                self._on_hlt(p)
+            elif tag == "ENV" and len(p) >= 6:
+                self._on_env(p)
+            elif tag == "EVT":
+                self._add_event(",".join(p[2:]))
+                telem = False
+            elif tag in ("ACK", "NAK"):
+                self._note(("Sent: " if tag == "ACK" else "Refused: ") + ",".join(p[2:]))
+                telem = False
+        elif p[0] == TEAM_ID and len(p) >= 19:
+            telem = True
+            self._on_frame(p, line)
+        elif "MISSION:" in line and "]" in line:
+            self._add_event(line.split("MISSION:", 1)[1].strip())
+        if not telem or self.show_telem.get():
+            self._console_add(line + "\n")
+
+    def _on_msn(self, p):
         try:
-            parts = [p.strip() for p in line.split(",")]
-            temp = None
-            hum = None
-            voc = None
-            nox = None
-
-            if len(parts) >= 6 and parts[1] == "ENV":
-                temp = float(parts[2])
-                hum = float(parts[3])
-                voc = int(parts[4])
-                nox = int(parts[5])
-            elif len(parts) >= 5 and parts[0] == "ENV":
-                temp = float(parts[1])
-                hum = float(parts[2])
-                voc = int(parts[3])
-                nox = int(parts[4])
-            else:
-                m_t = re.search(r"T=([0-9.-]+)", line)
-                m_h = re.search(r"RH=([0-9.-]+)", line)
-                m_v = re.search(r"VOC_idx=([0-9]+)", line)
-                m_n = re.search(r"NOx_idx=([0-9]+)", line)
-                if m_t: temp = float(m_t.group(1))
-                if m_h: hum = float(m_h.group(1))
-                if m_v: voc = int(m_v.group(1))
-                if m_n: nox = int(m_n.group(1))
-
-            if temp is not None and hum is not None and voc is not None and nox is not None:
-                self.latest_temp = temp
-                self.latest_hum = hum
-                self.latest_voc = voc
-                self.latest_nox = nox
-
-                self.hum_buffer.append(hum)
-                self.voc_buffer.append(voc)
-                self.nox_buffer.append(nox)
-                self.temp_buffer.append(temp)
-                self.env_time_buffer.append(datetime.now().strftime("%H:%M:%S"))
-
-                # Quality & Color Mapping for VOC (Sensirion UBA Standard):
-                if voc <= 100:
-                    voc_desc = "Clean Baseline"
-                    voc_color = "#2ecc71"
-                elif voc <= 150:
-                    voc_desc = "VOC Detected"
-                    voc_color = "#f1c40f"
-                elif voc <= 250:
-                    voc_desc = "Elevated VOC"
-                    voc_color = "#e67e22"
-                elif voc <= 380:
-                    voc_desc = "High VOC Alert"
-                    voc_color = "#e74c3c"
-                else:
-                    voc_desc = "Hazardous Spike"
-                    voc_color = "#9b59b6"
-
-                # Quality & Color Mapping for NOx:
-                if nox <= 5:
-                    nox_desc = "Normal Ambient"
-                    nox_color = "#2ecc71"
-                elif nox <= 25:
-                    nox_desc = "Low NOx"
-                    nox_color = "#f1c40f"
-                elif nox <= 100:
-                    nox_desc = "Elevated NOx"
-                    nox_color = "#e67e22"
-                else:
-                    nox_desc = "High NOx Alert"
-                    nox_color = "#e74c3c"
-
-                # Update GCS Tab Metrics
-                if hasattr(self, 'metric_labels'):
-                    if "hum" in self.metric_labels:
-                        self.metric_labels["hum"].configure(text=f"{hum:.1f} %")
-                    if "temp" in self.metric_labels:
-                        self.metric_labels["temp"].configure(text=f"{temp:.1f} °C")
-                    if "voc" in self.metric_labels:
-                        self.metric_labels["voc"].configure(text=f"{voc} ({voc_desc})", text_color=voc_color)
-                    if "nox" in self.metric_labels:
-                        self.metric_labels["nox"].configure(text=f"{nox} ({nox_desc})", text_color=nox_color)
-
-                # Update Environmental Tab Cards
-                if hasattr(self, 'env_lbl_temp'):
-                    self.env_lbl_temp.configure(text=f"{temp:.1f} °C")
-                if hasattr(self, 'env_lbl_hum'):
-                    self.env_lbl_hum.configure(text=f"{hum:.1f} %")
-                if hasattr(self, 'env_lbl_voc'):
-                    self.env_lbl_voc.configure(text=f"{voc} ({voc_desc})", text_color=voc_color)
-                if hasattr(self, 'env_lbl_nox'):
-                    self.env_lbl_nox.configure(text=f"{nox} ({nox_desc})", text_color=nox_color)
-
-                # Update FC Subsystem BIT Badges
-                if hasattr(self, 'sensor_status_badges'):
-                    if "sht_status" in self.sensor_status_badges:
-                        self.sensor_status_badges["sht_status"].configure(text="● READY", text_color="#2ecc71")
-                    if "sgp_status" in self.sensor_status_badges:
-                        self.sensor_status_badges["sgp_status"].configure(text="● READY", text_color="#2ecc71")
-        except Exception:
+            ph = p[2]
+            s = self.tm
+            s["lift"] = ph.startswith("LIFT-")
+            s["phase"] = ph[5:] if s["lift"] else ph
+            s["agl"], s["v"], s["peak"] = float(p[3]), float(p[4]), float(p[5])
+            s["arms"], s["esc"] = int(p[6]), int(p[7])
+            s["dist"], s["brg"], s["sats"], s["held"] = float(p[8]), float(p[9]), int(p[10]), int(p[11])
+            s["sp"], s["hdg"] = (float(p[12]), float(p[13])), float(p[14])
+            self.alt_hist.append((time.time(), s["agl"]))
+            if telemetry_3d_server:
+                telemetry_3d_server.update_telemetry(alt=s["agl"], state_name=PHASE_LABEL.get(s["phase"], s["phase"]))
+        except (ValueError, IndexError):
             pass
 
-    def _handle_incoming_line(self, line):
-        # Terminal: show logs/commands always; telemetry frames at most 2 per second
-        if line.startswith("1234,0") or line.startswith("1234,1") or line.startswith("1234,2"):
-            now_t = time.time()
-            if now_t - getattr(self, "_last_term_frame_t", 0.0) >= 0.5:
-                self._last_term_frame_t = now_t
-                self._append_term_text(line)
-        else:
-            self._append_term_text(line)
+    def _on_frame(self, p, line):
+        self._record_frame(line)
+        try:
+            s = self.tm
+            t = float(p[1])
+            s["mtime"] = f"{int(t // 3600):02d}:{int(t % 3600 // 60):02d}:{int(t % 60):02d}"
+            s["pkts"] = int(p[2])
+            s["pressure"], s["temp"] = float(p[4]), float(p[5])
+            s["lat"], s["lon"] = float(p[8]), float(p[9])
+            if telemetry_3d_server:
+                telemetry_3d_server.update_telemetry(pres=s["pressure"], temp=s["temp"], pcount=s["pkts"])
+        except (ValueError, IndexError):
+            pass
 
-        clean_line = line.strip()
-        if not clean_line:
-            return
-
-        # Check for Environmental packet (1234,ENV,... or ENV:...):
-        if clean_line.startswith("1234,ENV,") or clean_line.startswith("ENV,") or "ENV: SHT4x:" in clean_line:
-            self._handle_env_line(clean_line)
-            return
-
-        # Check for TX > format
-        if clean_line.startswith("TX >"):
-            clean_line = clean_line[4:].strip()
-
-        parts = [p.strip() for p in clean_line.split(",")]
-
-        # 16-field CAN-7USAT standard
-        if len(parts) >= 16:
+    def _on_hlt(self, p):
+        keys = ["uptime", "imu_hz", "baro", "sats", "vbat", "heap", "log_kb", "erased_kb", "temp", "bit",
+                "ble", "mount", "crash", "dropped"]
+        h = {}
+        for k, v in zip(keys, p[2:16]):
+            h[k] = v
+        self.health = h
+        if telemetry_3d_server:
             try:
-                team_id = parts[0]
-                m_time = parts[1]
-                p_count = int(parts[2])
-                alt = float(parts[3])
-                pres = float(parts[4])
-                temp = float(parts[5])
-                volt = float(parts[6])
-                gnss_time = parts[7]
-                lat = float(parts[8])
-                lon = float(parts[9])
-                sats = int(parts[11])
-                tilt_x = float(parts[12])
-                tilt_y = float(parts[13])
-                rot_z = float(parts[14])
-                state = int(parts[15])
-                state_info = STATE_NAMES.get(state, (f"STATE_{state}", "#95a5a6"))
-
-                att_live = self._att_stream_active()
-                if not att_live:
-                    # Older firmware without the ATT quaternion stream: use the frame's Euler
-                    self.q_raw = quat_from_zxy(tilt_x, tilt_y, rot_z)
-                eff_pitch, eff_roll, eff_yaw = euler_zxy(apply_tare(self.q_tare, self.q_raw))
-
-                self.time_buffer.append(m_time)
-                self.alt_buffer.append(alt)
-                self.pres_buffer.append(pres)
-                self.temp_buffer.append(temp)
-                self.volt_buffer.append(volt)
-                self.state_buffer.append(state)
-
-                if telemetry_3d_server:
-                    if att_live:
-                        # Attitude is streamed separately (quaternion); send only frame data
-                        telemetry_3d_server.update_telemetry(
-                            alt=alt, pres=pres, temp=temp, volt=volt,
-                            state=state, state_name=state_info[0], pcount=p_count
-                        )
-                    else:
-                        telemetry_3d_server.update_telemetry(
-                            pitch=eff_pitch, roll=eff_roll, yaw=eff_yaw,
-                            alt=alt, pres=pres, temp=temp, volt=volt,
-                            state=state, state_name=state_info[0], pcount=p_count
-                        )
-
-                # Throttle Tkinter UI widget configurations to 20 Hz (50ms)
-                now_ui = time.time()
-                if not hasattr(self, '_last_ui_draw_t') or (now_ui - self._last_ui_draw_t >= 0.05):
-                    self._last_ui_draw_t = now_ui
-                    self.metric_labels["alt"].configure(text=f"{alt:.2f} m")
-                    self.metric_labels["pres"].configure(text=f"{pres:.1f} Pa")
-                    self.metric_labels["temp"].configure(text=f"{temp:.1f} °C")
-                    self.metric_labels["volt"].configure(text=f"{volt:.2f} V")
-                    self.metric_labels["mtime"].configure(text=m_time)
-                    self.metric_labels["pcount"].configure(text=str(p_count))
-                    self.metric_labels["sats"].configure(text=str(sats))
-                    self.metric_labels["gps"].configure(text=f"{lat:.4f}, {lon:.4f}")
-                    self.state_badge.configure(text=f"{state_info[0]} ({state})", text_color=state_info[1])
-                    self._update_fc_reactions(state, alt, eff_pitch, eff_roll)
-                    if not att_live:
-                        self.metric_labels["tilt"].configure(text=f"{eff_pitch:.1f}°, {eff_roll:.1f}°")
-                        self.metric_labels["rotz"].configure(text=f"{eff_yaw:.1f}°")
-                        self._update_3d_tab_readouts(eff_pitch, eff_roll, eff_yaw)
-            except Exception:
+                telemetry_3d_server.update_telemetry(volt=float(h.get("vbat", 0)))
+            except ValueError:
                 pass
 
-        # 11-field Transmitter format
-        elif len(parts) >= 11:
-            try:
-                p_count = int(parts[0])
-                state_str = parts[1]
-                alt = float(parts[2])
-                temp_bmp = float(parts[3])
-                hum = float(parts[5])
-                pres_hpa = float(parts[6])
-                pitch = float(parts[7])
-                roll = float(parts[8])
-                az_world = float(parts[9])
-                vel_z = float(parts[10])
+    def _on_env(self, p):
+        try:
+            self.env = dict(t=float(p[2]), rh=float(p[3]), voc=int(p[4]), nox=int(p[5]))
+        except ValueError:
+            pass
 
-                # This format carries pitch/roll only (field 9 is vertical acceleration, not yaw)
-                self.q_raw = quat_from_zxy(pitch, roll, 0.0)
-                eff_pitch, eff_roll, eff_yaw = euler_zxy(apply_tare(self.q_tare, self.q_raw))
+    def _handle_att(self, q, mcu, mount):
+        s = self.tm
+        s["q"], s["mcu"], s["mount"] = q, mcu, mount
 
-                state_map = {"ON_PAD": 2, "ASCENT": 3, "DESCENT": 4, "DEPLOYED": 4, "HOVER": 6, "LANDED": 7}
-                state = state_map.get(state_str, 2)
-                state_info = STATE_NAMES.get(state, (state_str, "#95a5a6"))
+    def _add_event(self, text):
+        stamp = datetime.now().strftime("%H:%M:%S")
+        if self.events and self.events[-1][1] == text:
+            return
+        self.events.append((stamp, text))
+        self.event_box.configure(state="normal")
+        if len(self.events) == 1:
+            self.event_box.delete("1.0", "end")
+        self.event_box.insert("end", f"{stamp}  {text}\n")
+        self.event_box.see("end")
+        self.event_box.configure(state="disabled")
 
-                self.time_buffer.append(datetime.now().strftime("%H:%M:%S"))
-                self.alt_buffer.append(alt)
-                self.pres_buffer.append(pres_hpa * 100.0)
-                self.temp_buffer.append(temp_bmp)
-                self.volt_buffer.append(7.40)
-                self.state_buffer.append(state)
+    # ------------------------------------------------------------------ periodic UI refresh (2 Hz/10 Hz)
+    def _tick(self):
+        s = self.tm
+        now = time.time()
+        if now - self._rx_t0 >= 1.0:
+            self._rx_rate = self._rx_count / (now - self._rx_t0)
+            s["att_rate"] = self._att_count / (now - self._rx_t0)
+            self._rx_count = self._att_count = 0
+            self._rx_t0 = now
 
-                if telemetry_3d_server:
-                    telemetry_3d_server.update_telemetry(
-                        pitch=eff_pitch, roll=eff_roll, yaw=eff_yaw,
-                        alt=alt, pres=pres_hpa * 100.0, temp=temp_bmp, volt=7.4,
-                        state=state, state_name=state_info[0], pcount=p_count
-                    )
+        self.rail.set(s["phase"], s["lift"])
+        self.ov["agl"].set(f"{s['agl']:.1f}")
+        self.ov["v"].set(f"{s['v']:+.1f}")
+        self.ov["peak"].set(f"{s['peak']:.0f}")
+        self.ov["mtime"].set(s["mtime"])
+        self.ret["dist"].set(f"{s['dist']:.0f} m" if s["dist"] > 0 else "no site fix", None if s["dist"] > 0 else C["faint"])
+        self.ret["brg"].set(f"{s['brg']:.0f} deg")
+        self.ret["sats"].set(str(s["sats"]), C["ok"] if s["sats"] >= 5 else C["warn"])
+        self.ret["tilt"].set(f"{s['sp'][0]:+.0f}, {s['sp'][1]:+.0f} deg")
+        self.ret["arms"].set("open" if s["arms"] else "latched", C["accent"] if s["arms"] else None)
+        esc = ESC_STATE.get(s["esc"], "?")
+        self.ret["esc"].set(esc, C["ok"] if esc == "running" else None)
 
-                # Throttle Tkinter UI widget configurations to 20 Hz (50ms)
-                now_ui = time.time()
-                if not hasattr(self, '_last_ui_draw_t') or (now_ui - self._last_ui_draw_t >= 0.05):
-                    self._last_ui_draw_t = now_ui
-                    self.metric_labels["alt"].configure(text=f"{alt:.2f} m")
-                    self.metric_labels["pres"].configure(text=f"{pres_hpa * 100.0:.1f} Pa")
-                    self.metric_labels["temp"].configure(text=f"{temp_bmp:.1f} °C")
-                    self.metric_labels["volt"].configure(text="7.40 V")
-                    self.metric_labels["pcount"].configure(text=str(p_count))
-                    self.metric_labels["tilt"].configure(text=f"{eff_pitch:.1f}°, {eff_roll:.1f}°")
-                    self.metric_labels["rotz"].configure(text=f"{az_world:.1f} m/s²")
-                    self.state_badge.configure(text=f"{state_info[0]} ({state})", text_color=state_info[1])
-                    self._update_fc_reactions(state, alt, eff_pitch, eff_roll)
-                    self._update_3d_tab_readouts(eff_pitch, eff_roll, eff_yaw)
-            except Exception:
-                pass
+        pitch, roll, yaw = euler_zxy(s["q"])
+        self.horizon.set(pitch, roll)
+        self.att["p"].set(f"{pitch:+.1f}")
+        self.att["r"].set(f"{roll:+.1f}")
+        self.att["y"].set(f"{yaw:.1f}")
+        self.att_rows["mount"].set(MOUNTS.get(s["mount"], "?"))
+        self.att_rows["rate"].set(f"{s['att_rate']:.0f} Hz")
+        self.att_rows["mcu"].set(f"{s.get('mcu', 0) / 1000:.2f} s")
 
-    def _update_fc_reactions(self, state, alt, pitch, roll):
-        if state >= 4:
-            self.motor_bars["servo"][0].set(1.0)
-            self.motor_bars["servo"][1].configure(text="2000 µs (DEPLOYED)")
-        else:
-            self.motor_bars["servo"][0].set(0.0)
-            self.motor_bars["servo"][1].configure(text="1000 µs (LOCKED)")
+        self._refresh_health()
+        if HAVE_MPL and now - getattr(self, "_last_plot", 0) > 0.5:
+            self._last_plot = now
+            self._refresh_plot()
 
-        if state == 6:
-            base_pwm = 1250
-            m1_val = max(1000, min(1450, int(base_pwm + pitch * 2 + roll * 2)))
-            m2_val = max(1000, min(1450, int(base_pwm + pitch * 2 - roll * 2)))
-            m3_val = max(1000, min(1450, int(base_pwm - pitch * 2 - roll * 2)))
-            m4_val = max(1000, min(1450, int(base_pwm - pitch * 2 + roll * 2)))
+        live = self.link is not None and now - self._last_line_t < 3
+        self.sb_items["mtime"].configure(text=f"T+ {s['mtime']}")
+        self.sb_items["pkts"].configure(text=f"packets {s['pkts']}")
+        self.sb_items["rate"].configure(text=f"{self._rx_rate:.0f} lines/s" if live else "no data")
+        self.sb_items["log"].configure(text=f"recording Flight_{TEAM_ID}.csv  {self.tm_rows} rows" if self.tm_rows else "")
+        if hasattr(self, "tm_label"):
+            self.tm_label.configure(text=f"{self._tm_path()}\n{self.tm_rows} frames recorded this session")
+        self.after(100, self._tick)
 
-            for k, val in [("m1", m1_val), ("m2", m2_val), ("m3", m3_val), ("m4", m4_val)]:
-                self.motor_bars[k][0].set((val - 1000) / 1000.0)
-                self.motor_bars[k][1].configure(text=f"{val} µs (PID ACTIVE)")
-        elif state == 7:
-            for k in ["m1", "m2", "m3", "m4"]:
-                self.motor_bars[k][0].set(0.0)
-                self.motor_bars[k][1].configure(text="1000 µs (LANDED CUTOFF)")
-        else:
-            for k in ["m1", "m2", "m3", "m4"]:
-                self.motor_bars[k][0].set(0.0)
-                self.motor_bars[k][1].configure(text="1000 µs (DISARMED)")
-
-    def _update_plots(self):
-        if MATPLOTLIB_AVAILABLE and hasattr(self, 'line_alt') and len(self.alt_buffer) > 1:
-            try:
-                x_pts = list(range(len(self.alt_buffer)))
-                alts = list(self.alt_buffer)
-                states = list(self.state_buffer) if len(self.state_buffer) == len(self.alt_buffer) else [2] * len(x_pts)
-
-                self.line_alt.set_data(x_pts, alts)
-                self.ax1.set_xlim(0, max(20, len(x_pts)))
-                min_a = min(alts)
-                max_a = max(alts)
-                self.ax1.set_ylim(min(0.0, min_a - 10.0), max(50.0, max_a + 20.0))
-
-                self.line_state.set_data(x_pts, states)
-                self.ax2.set_xlim(0, max(20, len(x_pts)))
-
-                self.canvas.draw_idle()
-            except Exception:
-                pass
-
-        if MATPLOTLIB_AVAILABLE and hasattr(self, 'line_env_hum') and len(self.hum_buffer) > 1:
-            try:
-                x_env = list(range(len(self.hum_buffer)))
-                hums = list(self.hum_buffer)
-                temps = list(self.temp_buffer)[-len(x_env):] if len(self.temp_buffer) >= len(x_env) else [self.latest_temp] * len(x_env)
-                vocs = list(self.voc_buffer)
-                noxs = list(self.nox_buffer)
-
-                self.line_env_hum.set_data(x_env, hums)
-                self.line_env_temp.set_data(x_env, temps)
-                self.line_env_voc.set_data(x_env, vocs)
-                self.line_env_nox.set_data(x_env, noxs)
-
-                self.ax_env_trend.set_xlim(0, max(20, len(x_env)))
-                max_val = max(110.0, max(vocs) + 15.0 if vocs else 110.0)
-                self.ax_env_trend.set_ylim(0, max_val)
-
-                curr_voc = max(1, self.latest_voc)
-                curr_nox = max(1, self.latest_nox)
-
-                r_voc = (curr_voc / 100.0) ** (-0.4)
-                self.dot_voc.set_data([r_voc], [curr_voc])
-
-                if curr_nox > 1:
-                    arg = max(0.001, 1.0 - (curr_nox - 1.0) / 499.0)
-                    r_nox = 1.0 - math.log(arg) / 5.0
-                else:
-                    r_nox = 1.0
-                self.dot_nox.set_data([r_nox], [curr_nox])
-
-                self.env_canvas.draw_idle()
-            except Exception:
-                pass
-
-        self.after(350, self._update_plots)
-
-    # -------------------------------------------------------------------------
-    # FLASHER ACTIONS (esptool)
-    # -------------------------------------------------------------------------
-    def _log_flash(self, msg):
-        self.flash_log_txt.insert("end", msg)
-        self.flash_log_txt.see("end")
-
-    def _action_detect_chip(self):
-        port = self.port_combo.get()
-        if not port or port == "No Ports Found":
-            messagebox.showerror("Error", "No valid COM port selected.")
+    def _refresh_health(self):
+        h, t = self.health, self.tiles
+        if not h:
             return
 
-        def run_detect():
-            self._log_flash(f"\n--- Probing ESP32 on {port} ---\n")
-            if self.is_connected:
-                self._disconnect_serial()
-
-            cmd = [sys.executable, "-m", "esptool", "--port", port, "chip-id"]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            for line in proc.stdout:
-                self._log_flash(line)
-            proc.wait()
-
-            cmd_flash = [sys.executable, "-m", "esptool", "--port", port, "flash-id"]
-            proc_f = subprocess.Popen(cmd_flash, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            for line in proc_f.stdout:
-                self._log_flash(line)
-            proc_f.wait()
-
-        threading.Thread(target=run_detect, daemon=True).start()
-
-    def _action_erase_flash(self):
-        port = self.port_combo.get()
-        if not port or port == "No Ports Found":
-            messagebox.showerror("Error", "No valid COM port selected.")
-            return
-
-        if not messagebox.askyesno("Confirm Erase", f"Are you sure you want to completely erase the flash memory on {port}?"):
-            return
-
-        def run_erase():
-            self._log_flash(f"\n--- Erasing Flash on {port} ---\n")
-            if self.is_connected:
-                self._disconnect_serial()
-
-            cmd = [sys.executable, "-m", "esptool", "--port", port, "erase-flash"]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            for line in proc.stdout:
-                self._log_flash(line)
-            proc.wait()
-            self._log_flash("Flash erase completed.\n")
-
-        threading.Thread(target=run_erase, daemon=True).start()
-
-    def _action_flash_firmware(self):
-        port = self.port_combo.get()
-        role = self.role_var.get()
-        bit_bypass = self.bit_bypass_var.get()
-
-        if not port or port == "No Ports Found":
-            messagebox.showerror("Error", "No valid COM port selected.")
-            return
-
-        def run_flash_task():
-            self._log_flash(f"\n========================================\n")
-            self._log_flash(f"Flashing Target: ROLE_{role}\n")
-            self._log_flash(f"Sensorless BIT Bypass: {bit_bypass}\n")
-            self._log_flash(f"Target Port: {port}\n")
-            self._log_flash(f"========================================\n")
-
-            if self.is_connected:
-                self._disconnect_serial()
-
-            workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            build_dir = os.path.join(workspace_dir, "build")
-
-            flasher_args_file = os.path.join(build_dir, "flasher_args.json")
-            if os.path.exists(flasher_args_file):
-                try:
-                    with open(flasher_args_file, "r") as f:
-                        fargs = json.load(f)
-                    chip = fargs.get("extra_esptool_args", {}).get("chip", "esp32s3")
-                    flash_files = fargs.get("flash_files", {})
-                    self._log_flash(f"Flashing {chip} binaries from build/...\n")
-                    cmd = [
-                        sys.executable, "-m", "esptool",
-                        "--chip", chip,
-                        "--port", port,
-                        "--baud", "460800",
-                        "--before", "default_reset",
-                        "--after", "hard_reset",
-                        "write_flash", "-z"
-                    ]
-                    for addr, rel_path in flash_files.items():
-                        cmd.extend([addr, os.path.join(build_dir, rel_path)])
-
-                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                    for line in proc.stdout:
-                        self._log_flash(line)
-                    proc.wait()
-                    if proc.returncode == 0:
-                        self._log_flash("\n✔ CANSAT_FW FLASH SUCCESSFUL!\n")
-                    else:
-                        self._log_flash(f"\n✖ Flash failed with code {proc.returncode}\n")
-                except Exception as ex:
-                    self._log_flash(f"Error parsing flasher_args.json: {ex}\n")
+        def tile(k, value, sub, status):
+            dot, val, sl = t[k]
+            dot.set({"ok": C["ok"], "warn": C["warn"], "bad": C["bad"]}.get(status, C["faint"]))
+            val.configure(text=value)
+            sl.configure(text=sub)
+        try:
+            imu = float(h["imu_hz"])
+            tile("imu", f"{imu:.0f} Hz", MOUNTS.get(int(h["mount"]), ""), "ok" if imu >= 90 else "warn" if imu > 0 else "bad")
+            tile("baro", "OK" if h["baro"] == "1" else "No data", f"{self.tm['pressure']:.0f} Pa" if self.tm["pressure"] else "",
+                 "ok" if h["baro"] == "1" else "bad")
+            sats = int(h["sats"])
+            tile("gnss", f"{sats} sats", "launch site needs 5+", "ok" if sats >= 5 else "warn")
+            vb = float(h["vbat"])
+            tile("bat", f"{vb:.2f} V" if vb > 0 else "not fitted", "power monitor", "ok" if vb > 7.0 else "warn" if vb > 0 else None)
+            heap = int(h["heap"])
+            tile("mem", f"{heap} KB", "internal RAM free", "ok" if heap > 40 else "warn")
+            erased = int(h["erased_kb"]) / 1024
+            tile("log", f"{int(h['log_kb'])} KB", f"{erased:.1f} MB pre-erased ahead",
+                 "ok" if erased >= 2.5 else "warn")
+            tile("temp", f"{float(h['temp']):.1f} C", "baro sensor", "ok")
+            tile("link", "Connected" if h["ble"] == "1" else "Advertising", "off automatically in flight", "ok")
+            bits = int(h["bit"], 16)
+            if bits == 0:
+                self.bit_label.configure(text="All checks passed", text_color=C["ok"])
             else:
-                self._log_flash(f"Workspace: {workspace_dir}\n")
-                self._log_flash(f"Building cansat_fw with ESP-IDF...\n")
-                cmd = ["idf.py", "-C", workspace_dir, "build", "flash", "-p", port]
-                try:
-                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                    for line in proc.stdout:
-                        self._log_flash(line)
-                    proc.wait()
-                except FileNotFoundError:
-                    self._log_flash("ESP-IDF (idf.py) is currently being installed.\n")
+                names = [BIT_NAMES[i] for i in BIT_NAMES if bits & (1 << i)]
+                self.bit_label.configure(text="Attention: " + ", ".join(names), text_color=C["warn"])
+            self.crash_label.configure(
+                text="A crash dump from a previous session is stored. See Flight log, Crash report." if h["crash"] == "1"
+                else "No crash dump stored", text_color=C["bad"] if h["crash"] == "1" else C["muted"])
+        except (KeyError, ValueError):
+            pass
+        e = self.env
+        if e:
+            self.env_rows["t"].set(f"{e['t']:.1f} C")
+            self.env_rows["rh"].set(f"{e['rh']:.1f} %")
+            self.env_rows["voc"].set(str(e["voc"]))
+            self.env_rows["nox"].set(str(e["nox"]))
+        if self.tm["pressure"]:
+            self.env_rows["p"].set(f"{self.tm['pressure'] / 100:.1f} hPa")
 
-        threading.Thread(target=run_flash_task, daemon=True).start()
+    def _style_axes(self, ax):
+        ax.set_facecolor(C["panel"])
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        for side in ("left", "bottom"):
+            ax.spines[side].set_color(C["line"])
+        ax.tick_params(colors=C["muted"], labelsize=8, length=0)
+        ax.grid(True, color=C["line"], linewidth=0.6)
+        for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+            lbl.set_fontfamily("IBM Plex Sans" if SANS.startswith("IBM") else "sans-serif")
+
+    def _refresh_plot(self):
+        if not self.alt_hist:
+            return
+        now = time.time()
+        pts = [(t - now, a) for t, a in self.alt_hist if now - t <= 120]
+        if not pts:
+            return
+        xs, ys = zip(*pts)
+        self.alt_line.set_data(xs, ys)
+        self.ax.set_xlim(-120, 0)
+        lo, hi = min(ys), max(ys)
+        pad = max(2.0, (hi - lo) * 0.15)
+        self.ax.set_ylim(lo - pad, hi + pad)
+        self.alt_canvas.draw_idle()
+
+    # ------------------------------------------------------------------ ground telemetry file
+    def _tm_path(self):
+        d = self.settings.get("tm_dir") or DEFAULT_TM_DIR
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, f"Flight_{TEAM_ID}.csv")
+
+    def _record_frame(self, line):
+        """Append a received frame to Flight_<TEAM_ID>.csv (header written once)."""
+        try:
+            if self.tm_file is None:
+                path = self._tm_path()
+                new = not os.path.exists(path) or os.path.getsize(path) == 0
+                self.tm_file = open(path, "a", encoding="utf-8", newline="")
+                if new:
+                    self.tm_file.write(FRAME_HEADER + "\n")
+            self.tm_file.write(line.strip() + "\n")
+            self.tm_rows += 1
+            if self.tm_rows % 25 == 0:
+                self.tm_file.flush()
+        except OSError as e:
+            self._note(f"Cannot write telemetry file: {e}")
+
+    def _tm_archive(self):
+        path = self._tm_path()
+        if self.tm_file:
+            self.tm_file.close()
+            self.tm_file = None
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            if not messagebox.askyesno("Start a fresh file",
+                                       f"Rename the current file to Flight_{TEAM_ID}_<date>.csv and start a new one?\n\n"
+                                       "On flight day keep one file for the whole mission."):
+                return
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            os.replace(path, path.replace(".csv", f"_{stamp}.csv"))
+        self.tm_rows = 0
+        self._note("Started a fresh telemetry file")
+
+    def _tm_open_folder(self):
+        folder = os.path.dirname(self._tm_path())
+        try:
+            os.startfile(folder)
+        except Exception:
+            messagebox.showinfo("Telemetry folder", folder)
+
+    # ------------------------------------------------------------------ console
+    def _console_add(self, text, color=None):
+        self.console.insert("end", text)
+        if int(self.console.index("end-1c").split(".")[0]) > 3000:
+            self.console.delete("1.0", "500.0")
+        self.console.see("end")
+
+    def _console_clear(self):
+        self.console.delete("1.0", "end")
+
+    def _console_send(self):
+        text = self.cmd_entry.get().strip()
+        if not text:
+            return
+        self.history.append(text)
+        self.hist_i = len(self.history)
+        self.cmd_entry.delete(0, "end")
+        self._send(text, raw=True)
+
+    def _history(self, step):
+        if not self.history:
+            return
+        self.hist_i = max(0, min(len(self.history) - 1, self.hist_i + step))
+        self.cmd_entry.delete(0, "end")
+        self.cmd_entry.insert(0, self.history[self.hist_i])
+
+    def _note(self, text):
+        self.sb_items["note"].configure(text=text, text_color=C["text"])
+        self.after(5000, lambda: self.sb_items["note"].configure(text=""))
+
+    # ------------------------------------------------------------------ attitude tools
+    def _open_3d(self):
+        script = os.path.join(TOOLS, "launch_3d_visualizer.py")
+        threading.Thread(target=lambda: subprocess.run([sys.executable, script]), daemon=True).start()
+
+    def _tare(self):
+        self._send("TARE")
+
+    def _north(self):
+        if messagebox.askokcancel("Calibrate north",
+                                  "Point the CanSat's +X axis at true north (use a phone compass), keep it still, "
+                                  "then press OK. The offset is stored on the flight computer."):
+            self._send("NORTH")
+
+    # ------------------------------------------------------------------ flight log
+    def _need_usb(self):
+        if not self.link or self.link.kind != "usb":
+            messagebox.showinfo("USB needed", "Downloading or erasing the flight log needs the USB link.")
+            return False
+        return True
+
+    def _log_list(self):
+        if not self.link:
+            self._note("Not connected")
+            return
+        self.capture = ("list", "LOGLIST,END", [])
+        self.log_status.configure(text="Reading session list...")
+        self._send("LOG,LIST")
+
+    def _log_download(self):
+        if not self._need_usb():
+            return
+        sel = self.log_list.curselection()
+        idx = (sel[0] + 1) if sel else 1
+        path = filedialog.asksaveasfilename(
+            title="Save flight log", defaultextension=".csv", initialdir=self.settings.get("log_dir"),
+            initialfile=f"flight_{datetime.now():%Y%m%d_%H%M}_session{idx}.csv", filetypes=[("CSV", "*.csv")])
+        if not path:
+            return
+        self.settings["log_dir"] = os.path.dirname(path)
+        self._save_settings()
+        self._dump_path = path
+        self.capture = ("dump", "LOGEND", [])
+        self.log_status.configure(text=f"Downloading session {idx}... (telemetry pauses meanwhile)")
+        self._send(f"LOG,DUMP,{idx}")
+
+    def _log_erase(self):
+        if not self._need_usb():
+            return
+        if messagebox.askyesno("Erase flight log", "Erase all recorded sessions? This cannot be undone. "
+                                                   "It takes about a minute and only works on the pad."):
+            self._send("LOG,ERASE")
+            self.log_status.configure(text="Erasing... refresh the list in a minute.")
+
+    def _crash_report(self):
+        if not self.link:
+            self._note("Not connected")
+            return
+        self.capture = ("crash", "CRASH", [])
+        self._send("LOG,CRASH")
+
+    def _handle_capture(self, kind, lines):
+        if kind == "list":
+            self.log_list.delete(0, "end")
+            sessions = [l for l in lines if re.match(r"LOGLIST,\d+,", l)]
+            for l in sessions:
+                f = l.split(",")
+                self.log_list.insert("end", f"  #{f[1]:<3} {f[2]:<10} {f[3]:<16} {f[4]:<11} {f[5]:<8} {f[6]}  {','.join(f[7:])}")
+            head = next((l for l in lines if l.startswith("LOGLIST,BEGIN")), "")
+            hf = head.split(",")
+            extra = f"   capacity {int(hf[3]) // 1024} MB, {int(hf[4]) / 1024:.1f} MB pre-erased" if len(hf) >= 5 else ""
+            self.log_status.configure(text=f"{len(sessions)} session(s).{extra}")
+        elif kind == "dump":
+            hdr = next((l for l in lines if l.startswith("LOGHDR,")), None)
+            rows = [l for l in lines if l.startswith("LOG,")]
+            events = [l for l in lines if l.startswith("LOGEV,")]
+            try:
+                with open(self._dump_path, "w", newline="", encoding="utf-8") as f:
+                    w = csv.writer(f)
+                    w.writerow(hdr.split(",")[1:] if hdr else [])
+                    for r in rows:
+                        w.writerow(r.split(",")[1:])
+                ev_path = os.path.splitext(self._dump_path)[0] + "_events.csv"
+                with open(ev_path, "w", newline="", encoding="utf-8") as f:
+                    w = csv.writer(f)
+                    w.writerow(["t_ms", "phase", "event"])
+                    for e in events:
+                        parts = e.split(",", 3)
+                        w.writerow(parts[1:])
+                self.log_status.configure(text=f"Saved {len(rows)} records and {len(events)} events to {self._dump_path}")
+            except Exception as e:
+                self.log_status.configure(text=f"Could not save: {e}")
+        elif kind == "crash":
+            messagebox.showinfo("Crash report", "\n".join(l.replace("CRASH,", "") for l in lines) or "No crash dump")
+
+    # ------------------------------------------------------------------ bench
+    def _unlatch(self):
+        if self.link and self.link.kind != "usb":
+            self._note("Actuator commands need the USB link")
+            return
+        if messagebox.askyesno("Open arm latches", "Drive both linear servos to the unlatched position?"):
+            self._send("CHUTE")
+
+    def _motor_test(self, motor):
+        if self.link and self.link.kind != "usb":
+            self._note("Actuator commands need the USB link")
+            return
+        pct = int(self.mtr_slider.get())
+        name = "all motors" if motor < 0 else f"motor {motor + 1}"
+        if messagebox.askyesno("Motor test", f"Spin {name} at {pct} % for 3 seconds?\n\nProps must be OFF."):
+            self._send(f"MTR,{'ALL' if motor < 0 else motor},{pct}")
+
+    def _sim_toggle(self):
+        if self.sim_running:
+            self.sim_running = False
+            return
+        if not self.link:
+            self._note("Not connected")
+            return
+        self.sim_running = True
+        self.sim_btn.configure(text="Stop", image=icon("stop", 15, C["text"]))
+        threading.Thread(target=self._sim_run, args=(self.sim_profile.get(),), daemon=True).start()
+
+    def _sim_run(self, profile):
+        p0 = self.tm["pressure"] or 101325.0
+        if profile.startswith("Lift"):
+            segs = [(5, 0, 0), (20, 0, 30), (15, 30, 30), (20, 30, 0), (10, 0, 0)]
+            self._send("LIFT,10")
+        else:
+            segs = [(5, 0, 0), (30, 0, 750), (5, 750, 750), (62.5, 750, 0), (12, 0, 0)]
+        self._send("SIM,ENABLE")
+        time.sleep(0.5)
+        for dur, h0, h1 in segs:
+            n = int(dur * 20)
+            for k in range(n):
+                if not self.sim_running or not self.link:
+                    break
+                h = h0 + (h1 - h0) * k / n
+                self.link.send(f"CMD,{TEAM},SIMP,{p0 * (1 - 2.25577e-5 * h) ** 5.25588:.1f}")
+                time.sleep(0.05)
+        if profile.startswith("Lift"):
+            self._send("LIFT,OFF")
+        self._send("SIM,DISABLE")
+        self.sim_running = False
+        self.after(0, lambda: self.sim_btn.configure(text="Run", image=icon("play", 15, C["text"])))
+
+    # ------------------------------------------------------------------ firmware
+    def _flash_log(self, text):
+        self.after(0, lambda: (self.flash_box.insert("end", text), self.flash_box.see("end")))
+
+    def _esptool(self, args, title):
+        port = self.port_menu.get()
+        if self.link:
+            self._toggle_link()
+            time.sleep(0.3)
+        idf_py = r"C:\Espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe"
+        py = idf_py if os.path.exists(idf_py) else sys.executable
+        cmd = [py, "-m", "esptool", "--chip", "esp32s3", "--port", port, "--baud", "460800"] + args
+
+        def run():
+            self._flash_log(f"\n{title}\n")
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=ROOT)
+            for line in proc.stdout:
+                self._flash_log(line)
+            proc.wait()
+            self._flash_log("Done.\n" if proc.returncode == 0 else f"esptool exited with {proc.returncode}\n")
+        threading.Thread(target=run, daemon=True).start()
+
+    def _flash(self):
+        fa = os.path.join(ROOT, "build", "flasher_args.json")
+        if not os.path.exists(fa):
+            messagebox.showerror("No build", "build/flasher_args.json not found. Build the firmware first.")
+            return
+        with open(fa, encoding="utf-8") as f:
+            args = json.load(f)
+        fs = args.get("flash_settings", {})
+        files = []
+        for addr, rel in sorted(args.get("flash_files", {}).items(), key=lambda kv: int(kv[0], 16)):
+            files += [addr, os.path.join(ROOT, "build", rel)]
+        self._esptool(["--before", "default_reset", "--after", "hard_reset", "write_flash",
+                       "--flash_mode", fs.get("flash_mode", "dio"), "--flash_freq", fs.get("flash_freq", "80m"),
+                       "--flash_size", fs.get("flash_size", "16MB")] + files, "Flashing firmware from build/")
+
+    def _chip_id(self):
+        self._esptool(["flash_id"], "Reading chip information")
+
+    def _erase_flash(self):
+        if messagebox.askyesno("Erase entire flash", "Erase everything, including settings, the flight log and the "
+                                                     "firmware? You will need to flash again afterwards."):
+            self._esptool(["erase_flash"], "Erasing the entire flash")
+
+    # ------------------------------------------------------------------ shutdown
+    def _on_close(self):
+        self.sim_running = False
+        if self.tm_file:
+            self.tm_file.close()
+        if self.link:
+            self.link.stop()
+        self._save_settings()
+        self.destroy()
 
 
-    # =============================================================================
+def main():
+    load_fonts()
+    ctk.set_appearance_mode("dark")
+    app = Dock()
+    app.mainloop()
 
-    # ENTRY POINT
-
-    # =============================================================================
 
 if __name__ == "__main__":
-    app = AakashvaniDock()
-    app.mainloop()
+    main()

@@ -244,7 +244,7 @@ AttitudeOutput AttitudeReference::update(const Quat& q_raw, const double grav[3]
     // (A pure heading offset gives no evidence; any tilt — e.g. the
     //  perpendicular bench mount — gives strong evidence.)
     bool conv_changed = false;
-    if (is_still && g_ok) {
+    if (is_still && g_ok && !locked_.load()) {
         const double ux = grav[0]/gn, uy = grav[1]/gn, uz = grav[2]/gn;
         const double w = q_in.w, x = q_in.x, y = q_in.y, z = q_in.z;
         const double r22 = 1.0 - 2.0 * (x*x + y*y);
@@ -281,7 +281,7 @@ AttitudeOutput AttitudeReference::update(const Quat& q_raw, const double grav[3]
     }
 
     // Manual tare requested (or convention flipped: old reference is in the wrong convention)
-    if (tare_req_.exchange(false) || (conv_changed && referenced_.load())) {
+    if ((tare_req_.exchange(false) || (conv_changed && referenced_.load())) && !locked_.load()) {
         capture(q_unit, grav, MountClass::UNKNOWN);
         still_s_ = 0.0;
     }
@@ -322,7 +322,8 @@ AttitudeOutput AttitudeReference::update(const Quat& q_raw, const double grav[3]
     // Vehicle attitude against true gravity, heading zeroed at the reference:
     //   q_vw  = q_sensor (x) q_m        (vehicle -> world)
     //   q_out = q_yaw0* (x) q_vw
-    Quat q_out = q_norm(q_mul(q_conj(q_yaw0_), q_mul(q_unit, q_m_)));
+    const Quat q_vw = q_norm(q_mul(q_unit, q_m_));
+    Quat q_out = q_norm(q_mul(q_conj(q_yaw0_), q_vw));
 
     // q and -q are the same rotation; keep the output on one hemisphere so downstream
     // interpolation (GUI slerp, filters) never sees a spurious 360-deg jump.
@@ -334,6 +335,7 @@ AttitudeOutput AttitudeReference::update(const Quat& q_raw, const double grav[3]
 
     quat_to_euler_zxy(q_out, out.tilt_x_deg, out.tilt_y_deg, out.rot_z_deg);
     out.q_rel      = q_out;
+    out.q_world    = q_vw;
     out.mount      = mount_.load();
     out.referenced = true;
     return out;

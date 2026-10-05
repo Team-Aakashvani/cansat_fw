@@ -3,6 +3,7 @@ idf_component_register(
         "src/sd_logger.cpp"
         "src/event_log.cpp"
         "src/coredump_exporter.cpp"
+        "src/flight_recorder.cpp"
     INCLUDE_DIRS
         "include"
     REQUIRES
@@ -15,6 +16,7 @@ idf_component_register(
         log
         esp_timer
         freertos
+        esp_partition
     PRIV_REQUIRES
         espcoredump
 )

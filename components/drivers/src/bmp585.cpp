@@ -162,8 +162,10 @@ BaroData BMP585::read() noexcept {
         BaroData sim_data{};
         sim_data.pressure_pa = sim_pressure_pa_;
         sim_data.temperature_c = 25.0;
-        // Standard ISA reference for simulation packets
-        double alt_agl = 44330.0 * (1.0 - std::pow(sim_data.pressure_pa / 101325.0, 0.190294957));
+        // Same calibrated reference as live data, so simulated altitudes are AGL and the
+        // mission logic sees exactly what it would see in flight
+        const double p0 = (sea_level_p0_pa_ > 30000.0) ? sea_level_p0_pa_ : 101325.0;
+        double alt_agl = 44330.0 * (1.0 - std::pow(sim_data.pressure_pa / p0, 0.190294957)) - ground_alt_m_;
         sim_data.altitude_agl_m = alt_agl;
         sim_data.valid = true;
         return sim_data;

@@ -63,6 +63,7 @@ struct AttitudeOutput {
     double     tilt_y_deg = 0.0;  ///< Rotation about vehicle Y  (-180, +180]
     double     rot_z_deg  = 0.0;  ///< Rotation about vehicle Z (heading) [0, 360)
     Quat       q_rel{};           ///< Vehicle -> heading-tared world rotation (hemisphere-continuous)
+    Quat       q_world{};         ///< Vehicle -> sensor-fusion world (magnetic heading kept; for guidance)
     MountClass mount      = MountClass::UNKNOWN;
     bool       referenced = false;
 };
@@ -93,7 +94,11 @@ public:
     void sensor_to_vehicle(const double s[3], double v[3]) const noexcept;
     Quat mount_quat() const noexcept { return q_m_; }
 
-    void request_tare() noexcept { tare_req_.store(true); }
+    void request_tare() noexcept { if (!locked_.load()) tare_req_.store(true); }
+    /// Flight lock: once airborne the reference must never move (tare and convention
+    /// changes are ignored), otherwise attitude would jump mid-air.
+    void set_locked(bool en) noexcept { locked_.store(en); if (en) tare_req_.store(false); }
+    bool locked() const noexcept { return locked_.load(); }
     void set_auto_remount(bool en) noexcept { auto_remount_.store(en); }
     bool auto_remount() const noexcept { return auto_remount_.load(); }
 
@@ -118,6 +123,7 @@ private:
     double roll_hold_deg_ = 0.0; ///< Last well-defined roll, held through gimbal lock
 
     std::atomic<bool>       tare_req_{false};
+    std::atomic<bool>       locked_{false};
     std::atomic<bool>       auto_remount_{false};
     std::atomic<bool>       referenced_{false};
     std::atomic<bool>       conj_{false};

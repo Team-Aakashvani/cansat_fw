@@ -35,6 +35,10 @@ struct IMUData {
     double quat_x = 0.0;
     double quat_y = 0.0;
     double quat_z = 0.0;
+    double qw_world = 1.0;        ///< Vehicle -> fusion-world quaternion (magnetic heading kept)
+    double qx_world = 0.0;
+    double qy_world = 0.0;
+    double qz_world = 0.0;
     MountClass mount = MountClass::UNKNOWN; ///< Auto-identified mount orientation
     double timestamp_s;
     bool   valid;

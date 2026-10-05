@@ -61,6 +61,9 @@ public:
     void on_mapping(GenericHandler h) noexcept { mapping_handler_ = h; }
     void on_ota    (OtaHandler     h) noexcept { ota_handler_     = h; }
     void on_tare   (GenericHandler h) noexcept { tare_handler_    = h; }
+    void on_north  (GenericHandler h) noexcept { north_handler_   = h; }
+    void on_lift   (SimHandler     h) noexcept { lift_handler_    = h; }
+    void on_log    (SimHandler     h) noexcept { log_handler_     = h; }
 
     /**
      * @brief Build the RxCallback to pass to XBeeLink::set_rx_callback().
@@ -89,6 +92,9 @@ private:
     GenericHandler mapping_handler_{};
     OtaHandler     ota_handler_{};
     GenericHandler tare_handler_{};
+    GenericHandler north_handler_{};
+    SimHandler     lift_handler_{};
+    SimHandler     log_handler_{};
 
     /// Parse "HH:MM:SS" → seconds. Returns 0 on parse error.
     static uint32_t parse_time_str(const char* s) noexcept;

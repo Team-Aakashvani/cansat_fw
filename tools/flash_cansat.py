@@ -48,7 +48,7 @@ def main():
         "write_flash",
         "--flash_mode", "dio",
         "--flash_freq", "80m",
-        "--flash_size", "4MB",
+        "--flash_size", "16MB",
         "0x0", bootloader,
         "0x8000", partitions,
         "0xf000", ota_data,

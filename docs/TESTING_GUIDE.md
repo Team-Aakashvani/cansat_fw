@@ -1,86 +1,77 @@
-# AAKASHVANI — Exhaustive Testing & Validation Protocol
-### Professional Certification for Flight Readiness
-> **From Bench to Launch Pad: A 25-Point Verification Guide.**
+# AAKASHVANI — Testing Guide
 
----
+Test in this order. Each level catches problems that are cheaper to fix than at the next one.
 
-## 1. Testing Philosophy
-Flight software validation at SVNIT follows a three-tier hierarchy:
-1.  **Deterministic Testing:** Built-In Test (BIT) ensures hardware-level integrity at every power-on.
-2.  **Dynamic Simulation:** Command-line injection of synthetic data to verify EKF convergence and state machine transitions.
-3.  **Environmental Soak:** Long-duration stress tests to detect memory leaks and thermal drift.
+## 1. Host unit tests (PC, no hardware)
 
----
+```powershell
+python tests/host/run_tests.py
+```
 
-## 2. Stage 1: Built-In Test (BIT) Reference
+They cover the attitude reference (mount detection, gimbal-lock-free output), the vertical
+filter (pressure spikes, accelerometer clipping) and the mission supervisor (rocket, drone drop,
+slow carrier that must **not** count as a release, in-flight resume, lift test). All must pass.
 
-### 2.1 Failure Code Interpretation
-If the onboard RGB LED blinks **RED (Rapid)**, a critical BIT failure has occurred. Connect the USB console and check the flags.
+## 2. Power-on self test (every boot)
 
-| Bit | Flag | Test Procedure | Critical? |
-|-----|------|----------------|-----------|
-| **0** | `IMU_ABSENT` | BNO085 I2C probe failed. Check Address 0x4A. | **YES** |
-| **1** | `BARO_ABSENT`| BMP585 I2C probe failed. Check Address 0x46. | **YES** |
-| **2** | `POWER_ABSENT`| INA260 I2C probe failed. Check Address 0x40. | **YES** |
-| **4** | `RADIO_ABSENT`| XBee UART response timeout. Check CTS/RTS. | **YES** |
-| **7** | `IMU_SANITY` | Accel magnitude check: $|a| \in [7.8, 11.8]$ m/s². | NO |
-| **8** | `BARO_SANITY`| Pressure range check: $P \in [70, 110]$ kPa. | NO |
+Watch the RGB LED:
 
-### 2.2 The BIT Override (Dev Mode Only)
-To test software logic without a connected CanSat PCB:
-1.  Connect via USB CLI (115200 baud).
-2.  Enter: `set bit_override 1`.
-3.  Enter: `reboot`.
-*Warning: This flag is cleared on every NVS-erase. Never fly with bit_override = 1.*
+| LED | Meaning |
+|---|---|
+| white fade → blue | power on, buses starting |
+| violet breathing | IMU aligning: keep the CanSat still |
+| 2× green | all checks passed |
+| 2× amber | warnings: optional hardware missing (normal for now: power monitor, SD) |
+| 3× red | IMU or barometer missing. Do not fly. |
+| 1× magenta | resumed after a reset in flight |
 
----
+Then the phase colour: green PAD, orange ASCENT, purple DESCENT, blue ARMS_DEPLOY, cyan STEERING,
+blinking red LANDED (with the buzzer). The BIT flags are on the dock's Health page (see
+`TELEMETRY_FORMAT.md` §2).
 
-## 3. Stage 2: Hardware-In-The-Loop (HIL) Simulation
+## 3. Hardware-in-the-loop flight (bench)
 
-AAKASHVANI allows the Ground Station to "take over" the sensors via the simulation protocol. This is the only way to verify the transition to the **PARACHUTE** and **DRONE_HOVER** states on the bench.
+Dock → **Bench** → *Simulated flight*. Choose rocket or drone drop. The dock switches the board
+to `SIM,ENABLE` and plays a pressure profile with `SIMP`. Then check, on the Overview page:
 
-### 3.1 Verification of 600m Deployment
-1.  Enter Simulation Mode: `1234,SIM,ENABLE`
-2.  Set Initial Pad Pressure: `1234,SIMP,101325` (Wait for CAL to finish).
-3.  Simulate Ascent: Inject decreasing pressure (e.g., `90000` Pa).
-4.  Simulate Descent: Inject increasing pressure.
-5.  **PASS CRITERIA:** When pressure reaches the equivalent of 600m (approx. 94300 Pa), verify:
-    *   `SOFTWARE_STATE` changes from 2 to 3.
-    *   Servo (GPIO38) moves to the **RELEASED** (2000µs) position.
+* PAD → ASCENT → DESCENT → ARMS_DEPLOY at 600 m → STEERING → LANDED;
+* the servos unlatch at ARMS_DEPLOY (if they are wired);
+* the event list shows every transition.
 
-### 3.2 Verification of Drone Stabilization
-1.  Simulate Altitude < 30m: `1234,SIMP,101000`.
-2.  **PASS CRITERIA:**
-    *   `SOFTWARE_STATE` changes to 4.
-    *   Motor PWM signals transition from 1000µs to active PID values (~1400µs).
-    *   Tilt the CanSat: Observe motor PWMs compensating to maintain level (Roll/Pitch).
+By hand (USB console): `CMD,001,SIM,ENABLE`, `CMD,001,CAL`, then `CMD,001,SIMP,<Pa>` at
+5–10 Hz. `CMD,001,SIM,DISABLE` ends it.
 
----
+## 4. Lift (elevator) test, real sensors
 
-## 4. Stage 3: Professional Pre-Flight Checklist
+`CMD,001,LIFT,10` (or Bench → *Lift test*) on the ground floor, then ride up at least 4 floors and
+come back down. Expected: ASCENT on the way up, DESCENT shortly after starting down, arms unlatch
+10 m above the start floor, LANDED at the bottom. **The motors are hard-inhibited** in this mode.
+`CMD,001,CAL` resets for another ride. `CMD,001,LIFT,OFF` (or a power cycle) restores flight
+mode.
 
-### 4.1 Physical Integration (The "Shake" Test)
-- [ ] All I2C connectors secured with Kapton tape or hot glue.
-- [ ] XBee antenna orientation: Vertical, clear of all carbon-fiber or metal struts.
-- [ ] Battery voltage check: 7.2V - 8.4V.
-- [ ] SD Card: Sandisk Industrial Class 10 (High write endurance).
+Negative test: in normal flight mode, a lift ride down must **not** release the arms (a carrier
+descending slowly with the CanSat still attached).
 
-### 4.2 On-Pad Finalization
-- [ ] **BIT PASS:** GCS receives packet with `BIT_FLAGS = 0x00`.
-- [ ] **GNSS LOCK:** `SATS >= 7` and `HDOP < 1.5`.
-- [ ] **CALIBRATE:** Send `1234,CAL` command. Verify `ALTITUDE` resets to $0.0 \pm 0.5$ m.
-- [ ] **TIME SYNC:** Send `1234,ST,00:00:00` to synchronize mission clock.
-- [ ] **TELEMETRY:** Confirm RSSI > -90dBm at a distance of 100m.
+## 5. Actuator bench tests: PROPS OFF
 
----
+USB only. See `FLIGHT_SOFTWARE.md` §4: servo unlatch with `CHUTE`, motor order with `MTR`,
+spin direction, mixer signs with `PID,START`.
 
-## 5. Post-Flight Crash Forensics
+## 6. Pre-flight checklist
 
-If the flight results in a non-nominal landing or reboot:
-1.  **Coredump Retrieval:** Boot the unit with the SD card inserted. Wait for `CoredumpExporter` to finish (LED will blink Blue).
-2.  **Event Log Analysis:** Connect via CLI and run `log_dump`. Check for `ERROR_FDIR` or `POWER_LOW` events immediately preceding the crash.
-3.  **Trace Analysis:** Use the ESP-IDF GDB tool to map the binary coredump back to the source code line.
+- [ ] Flight log downloaded or no longer needed. Recorder pre-erased ≥ 3 MB (Health page:
+      power on ≥ 2 minutes before launch).
+- [ ] Boot ended with 2× green or the expected amber; phase `PAD`; altitude ≈ 0 m.
+- [ ] GNSS ≥ 5 satellites, launch site set (Overview).
+- [ ] Heading calibrated (`NORTH`) after any change to the IMU mounting.
+- [ ] Ground station recording `Flight_2026-IN-SPACeCAN-7USAT-001.csv`.
+- [ ] `CX,ON` sent when the judges allow radio transmission.
+- [ ] Battery charged, props tight, arms latched.
 
----
+## 7. After the flight
 
-*This guide is mandatory for all SVNIT Flight Ops personnel.*
+1. Connect USB → **Flight log** → *Refresh list* → select the flight → *Download selected*. You get a CSV
+   of the 50 Hz records plus an events CSV.
+2. If the Health page shows a crash dump: *Crash report*, then decode the addresses with
+   `xtensa-esp32s3-elf-addr2line -pfiaC -e build/cansat_fw.elf <addresses>`.
+3. Hand in `Flight_2026-IN-SPACeCAN-7USAT-001.csv`.

@@ -15,15 +15,15 @@ print('=' * 75)
 print(' RUNNING STEP-BY-STEP ELEVATOR CLIMB WITH FIRMWARE DIAGNOSTICS')
 print('=' * 75)
 
-send('CMD,1234,SIM,ENABLE')
-send('CMD,1234,CAL')
+send('CMD,001,SIM,ENABLE')
+send('CMD,001,CAL')
 time.sleep(0.5)
 
 # Step climb
 for alt in [0.0, 5.0, 15.0, 30.0]:
     p = p0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
     print(f'\n--> INJECTING ALT: {alt}m')
-    send(f'CMD,1234,SIMP,{p:.1f}')
+    send(f'CMD,001,SIMP,{p:.1f}')
     t_end = time.time() + 1.2
     while time.time() < t_end:
         while ser.in_waiting:
@@ -35,7 +35,7 @@ print('\n--> DROPPING FROM BALCONY (30m -> 0m)')
 for alt in [25.0, 18.0, 10.0, 1.0, 0.0]:
     p = p0 * ((1.0 - 2.25577e-5 * alt) ** 5.25588)
     print(f'\n--> INJECTING ALT: {alt}m')
-    send(f'CMD,1234,SIMP,{p:.1f}')
+    send(f'CMD,001,SIMP,{p:.1f}')
     t_end = time.time() + 1.2
     while time.time() < t_end:
         while ser.in_waiting:
@@ -43,5 +43,5 @@ for alt in [25.0, 18.0, 10.0, 1.0, 0.0]:
             if l:
                 print('   [MCU] ' + l)
 
-send('CMD,1234,SIM,DISABLE')
+send('CMD,001,SIM,DISABLE')
 ser.close()

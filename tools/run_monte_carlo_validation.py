@@ -17,6 +17,9 @@ import sys
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+# Competition frame: field 19 is the state name; map it to the SOFTWARE_STATE code
+STATE_CODE = {"BOOT": 0, "PAD": 2, "ASCENT": 3, "DESCENT": 4, "ARMS_DEPLOY": 5, "STEERING": 6, "LANDED": 7}
+
 
 PORT = 'COM13'
 BAUD = 115200
@@ -117,9 +120,9 @@ def run_monte_carlo():
     
     for run_idx in range(1, N_RUNS + 1):
         # 1. Reset & Arm
-        ser.write(b"CMD,1234,SIM,ENABLE\n")
+        ser.write(b"CMD,001,SIM,ENABLE\n")
         time.sleep(0.1)
-        ser.write(b"CMD,1234,CAL\n")
+        ser.write(b"CMD,001,CAL\n")
         time.sleep(0.1)
         ser.reset_input_buffer()
         
@@ -133,7 +136,7 @@ def run_monte_carlo():
         
         for step_idx, step in enumerate(profile):
             # Inject noisy barometric pressure
-            ser.write(f"CMD,1234,SIMP,{step['noisy_p']:.1f}\n".encode('utf-8'))
+            ser.write(f"CMD,001,SIMP,{step['noisy_p']:.1f}\n".encode('utf-8'))
             time.sleep(0.2)
             
             fc_alt = step['ref_alt']
@@ -143,12 +146,12 @@ def run_monte_carlo():
             t0 = time.time()
             while time.time() - t0 < 0.4:
                 line = ser.readline().decode('utf-8', errors='replace').strip()
-                if line.startswith("1234,"):
+                if line.startswith("2026-IN-SPACeCAN-7USAT-001,"):
                     parts = line.split(',')
-                    if len(parts) >= 16:
+                    if len(parts) >= 19:
                         try:
                             fc_alt = float(parts[3])
-                            fc_state = int(parts[15])
+                            fc_state = STATE_CODE.get(parts[18].replace("LIFT-", ""), 0)
                             break
                         except ValueError:
                             pass
@@ -191,7 +194,7 @@ def run_monte_carlo():
         
         print(f"Result: {status_str} | Peak: {max_fc_alt:.1f}m | Final: {final_fc_alt:.1f}m | States: {sorted(list(states_seen))}")
 
-    ser.write(b"CMD,1234,SIM,DISABLE\n")
+    ser.write(b"CMD,001,SIM,DISABLE\n")
     ser.close()
     
     # Compute Statistics

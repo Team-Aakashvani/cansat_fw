@@ -28,6 +28,9 @@ enum class CommandType : uint8_t {
     PID,      ///< Live attitude PID stabilization test: PID,START | PID,STOP
     OTA,      ///< OTA update: OTA,START | OTA,CHUNK,<hex> | OTA,FINISH | OTA,ABORT
     TARE,     ///< Re-identify IMU mount, re-level and zero heading: TARE
+    NORTH,    ///< Heading calibration: vehicle +X is pointing at true north now
+    LIFT,     ///< Lift test mode: LIFT,<arm deploy AGL m> | LIFT,OFF (motors inhibited)
+    LOG,      ///< Flight log: LOG,LIST | LOG,DUMP[,n] | LOG,ERASE | LOG,CRASH | LOG,CRASHCLR
 };
 
 struct UplinkCommand {

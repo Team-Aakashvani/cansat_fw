@@ -5,6 +5,7 @@
 #include "cli/console.hpp"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstdio>
@@ -31,6 +32,13 @@ void Console::run() noexcept {
 
         process_line(line);
     }
+}
+
+void Console::inject_line(const char* line) noexcept {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%s", line ? line : "");
+    buf[strcspn(buf, "\r\n")] = '\0';
+    if (buf[0] != '\0') process_line(buf);
 }
 
 void Console::process_line(char* line) noexcept {
@@ -78,6 +86,15 @@ void Console::process_line(char* line) noexcept {
         printf("Boot Count: %lu\n", (unsigned long)nvs_.get_boot_count());
         printf("Ground Alt: %.2f m\n", (double)nvs_.get_ground_alt_m());
         printf("BIT Override: %s\n", nvs_.get_bit_override() ? "ENABLED" : "disabled");
+        printf("Heap free: %u B internal (min ever %u B, largest block %u B), PSRAM %u B\n",
+               (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+               (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+               (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        TaskStatus_t ts[24];
+        UBaseType_t n = uxTaskGetSystemState(ts, 24, nullptr);
+        for (UBaseType_t i = 0; i < n; ++i)
+            printf("  task %-12s stack headroom %5u B\n", ts[i].pcTaskName, (unsigned)ts[i].usStackHighWaterMark);
     } else {
         printf("Unknown command: %s. Type 'help' or 'test --help'.\n", argv[0]);
     }
@@ -223,9 +240,9 @@ void Console::handle_dispatch(const char* line) noexcept {
     char* tok = strtok_r(p, ", ", &saveptr);
     if (!tok) return;
 
-    // Skip optional team_id (e.g. "1234")
+    // Skip optional team_id (e.g. "001")
     unsigned team_id = 0;
-    if (sscanf(tok, "%u", &team_id) == 1 && (team_id == (unsigned)nav::TELEM_CFG.team_id || team_id == 0 || team_id == 1234)) {
+    if (sscanf(tok, "%u", &team_id) == 1 && (team_id == (unsigned)nav::TELEM_CFG.team_id || team_id == 0)) {
         tok = strtok_r(nullptr, ", ", &saveptr);
         if (!tok) return;
     }
@@ -245,6 +262,9 @@ void Console::handle_dispatch(const char* line) noexcept {
     else if (strcasecmp(tok, "MAP") == 0)   cmd.type = comms::CommandType::MAP;
     else if (strcasecmp(tok, "OTA") == 0)   cmd.type = comms::CommandType::OTA;
     else if (strcasecmp(tok, "TARE") == 0)  cmd.type = comms::CommandType::TARE;
+    else if (strcasecmp(tok, "NORTH") == 0) cmd.type = comms::CommandType::NORTH;
+    else if (strcasecmp(tok, "LIFT") == 0)  cmd.type = comms::CommandType::LIFT;
+    else if (strcasecmp(tok, "LOG") == 0)   cmd.type = comms::CommandType::LOG;
     else {
         printf("Unknown command type: %s\n", tok);
         return;

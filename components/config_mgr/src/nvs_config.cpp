@@ -43,6 +43,30 @@ uint16_t NVSConfig::get_team_id() const noexcept {
     return val;
 }
 
+float NVSConfig::get_heading_offset_deg() const noexcept {
+    nvs_handle_t nvs;
+    float val = 0.0f;
+    if (open_ro(nvs) == ESP_OK) {
+        uint32_t raw = 0;
+        if (nvs_get_u32(nvs, "hdg_off", &raw) == ESP_OK) memcpy(&val, &raw, sizeof(float));
+        nvs_close(nvs);
+    }
+    return val;
+}
+
+esp_err_t NVSConfig::set_heading_offset_deg(float deg) noexcept {
+    nvs_handle_t nvs;
+    esp_err_t ret = open_rw(nvs);
+    if (ret != ESP_OK) return ret;
+    uint32_t raw;
+    memcpy(&raw, &deg, sizeof(float));
+    ret = nvs_set_u32(nvs, "hdg_off", raw);
+    if (ret == ESP_OK) ret = nvs_commit(nvs);
+    nvs_close(nvs);
+    ESP_LOGI(TAG, "heading offset set to %.1f deg", (double)deg);
+    return ret;
+}
+
 float NVSConfig::get_ground_alt_m() const noexcept {
     nvs_handle_t nvs;
     float val = 0.0f;

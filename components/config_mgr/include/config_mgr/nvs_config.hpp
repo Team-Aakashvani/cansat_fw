@@ -49,6 +49,7 @@ public:
 
     float    get_last_lat()       const noexcept;
     float    get_last_lon()       const noexcept;
+    float    get_heading_offset_deg() const noexcept;   ///< NORTH calibration (guidance)
 
     // ----- Setters -----------------------------------------------------------
 
@@ -58,6 +59,7 @@ public:
     esp_err_t set_bit_override  (bool enable)         noexcept;
     esp_err_t set_mag_cal       (const float cal[3])  noexcept;
     esp_err_t set_last_pos      (float lat, float lon) noexcept;
+    esp_err_t set_heading_offset_deg(float deg)       noexcept;
 
     /// Increment and persist boot counter. Call once at startup after init().
     uint32_t  increment_boot_count() noexcept;

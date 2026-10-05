@@ -8,8 +8,8 @@ FILE:  tools/parser.py
 WHAT THIS SCRIPT DOES (plain English):
 --------------------------------------
 1. Plugs into the GCS bridge box via a USB cable (serial port).
-2. Reads lines of text coming from the CanSat (via LoRa radio → GCS bridge → USB).
-3. Each line has 16 comma-separated values (altitude, temperature, GPS, etc.).
+2. Reads lines of text coming from the CanSat (via the XBee radio → USB).
+3. Each line has 23 comma-separated values (altitude, temperature, GPS, etc.).
 4. Checks that each line is valid (correct number of fields, correct types).
 5. Converts valid lines into labeled JSON and broadcasts them over a WebSocket
    so the ground station GUI can display the data.
@@ -52,37 +52,39 @@ log = logging.getLogger("gcs_parser")
 
 
 # =============================================================================
-# FIELD DEFINITIONS — the 21 data fields in every telemetry line
+# FIELD DEFINITIONS — the 23 fields in every telemetry line
 # =============================================================================
 #
 # Following CAN-7USAT 2026 §5.3 (Telemetry Data Format) + Extended Mission
 #
 # Each telemetry line from the CanSat looks like:
-#   1234,00:04:32,272,587.34,94312.5,18.3,7.41,07:15:44,12.971600,77.594600,912.30,8,0.12,-0.04,1.23,3,433.5,-85,1,3.5,25
+#   2026-IN-SPACeCAN-7USAT-001,412.3,10308,587.3,94312,18.3,7.41,26144,21.163120,72.784630,612.3,8,0.12,-0.31,9.78,1.2,-0.8,0.3,DESCENT,182.0,61.4,102,1
 #
 
 FIELDS = [
-    ("team_id",         int),     #  0 — Team identification number
-    ("mission_time",    str),     #  1 — Clock time "HH:MM:SS"
-    ("packet_count",    int),     #  2 — How many packets sent so far
-    ("altitude_m",      float),   #  3 — Height above ground in meters
-    ("pressure_pa",     float),   #  4 — Air pressure in Pascals
-    ("temperature_c",   float),   #  5 — Temperature in Celsius
-    ("voltage_v",       float),   #  6 — Battery voltage
-    ("gnss_time",       str),     #  7 — GPS clock time
-    ("latitude_deg",    float),   #  8 — GPS latitude (north/south position)
-    ("longitude_deg",   float),   #  9 — GPS longitude (east/west position)
-    ("gnss_alt_m",      float),   # 10 — GPS altitude
-    ("satellites",      int),     # 11 — Number of GPS satellites visible
-    ("tilt_x",          float),   # 12 — Tilt angle X axis
-    ("tilt_y",          float),   # 13 — Tilt angle Y axis
-    ("rot_z",           float),   # 14 — Rotation around Z axis (spin rate)
-    ("software_state",  int),     # 15 — Which flight phase (0=preflight, 3=parachute, etc.)
-    ("cc1101_freq_mhz", float),   # 16 — RF scanner current frequency in MHz
-    ("cc1101_rssi_dbm", int),     # 17 — RF scanner signal strength (negative = weaker)
-    ("p4_recording",    int),     # 18 — Is the camera recording? (0=no, 1=yes)
-    ("p4_sd_gb",        float),   # 19 — Free space on camera SD card in GB
-    ("p4_fps",          int),     # 20 — Camera frames per second
+    ("team_id",            str),     #  0 - "2026-IN-SPACeCAN-7USAT-001"
+    ("time_s",             float),   #  1 - Seconds since power-on
+    ("packet_count",       int),     #  2 - How many packets sent so far
+    ("altitude_m",         float),   #  3 - Height above the launch site in metres
+    ("pressure_pa",        float),   #  4 - Air pressure in Pascals
+    ("temperature_c",      float),   #  5 - Temperature in Celsius
+    ("voltage_v",          float),   #  6 - Battery voltage (0 until the power monitor is fitted)
+    ("gnss_time_s",        float),   #  7 - GPS UTC seconds of day
+    ("latitude_deg",       float),   #  8 - GPS latitude (north/south position)
+    ("longitude_deg",      float),   #  9 - GPS longitude (east/west position)
+    ("gnss_alt_m",         float),   # 10 - GPS altitude above sea level
+    ("satellites",         int),     # 11 - Number of GPS satellites used
+    ("acc_x",              float),   # 12 - Acceleration X (m/s^2)
+    ("acc_y",              float),   # 13 - Acceleration Y (m/s^2)
+    ("acc_z",              float),   # 14 - Acceleration Z (m/s^2)
+    ("roll_deg",           float),   # 15 - Roll angle
+    ("pitch_deg",          float),   # 16 - Pitch angle
+    ("spin_rate_dps",      float),   # 17 - Spin rate about the long axis (deg/s)
+    ("software_state",     str),     # 18 - Flight phase name (PAD, ASCENT, DESCENT, ...)
+    ("heading_deg",        float),   # 19 - Compass heading
+    ("humidity_pct",       float),   # 20 - Relative humidity
+    ("voc_index",          int),     # 21 - SGP41 VOC index
+    ("nox_index",          int),     # 22 - SGP41 NOx index
 ]
 
 EXPECTED_FIELD_COUNT = len(FIELDS)

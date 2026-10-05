@@ -40,3 +40,7 @@ managed_components/
 
 # Runtime caches written by the dock / 3D server
 tools/latest_telemetry.json
+
+# Host test binaries
+tests/host/build/
+tools/aakashvani_dock_bkp.py

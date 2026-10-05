@@ -1,99 +1,70 @@
 /**
  * @file encoder.cpp
- * @brief CAN-7USAT telemetry encoder — CSV packet builder.
+ * @brief CAN-7USAT India 2026 telemetry frame builder.
  */
 #include "telemetry/encoder.hpp"
 #include "nav/config.hpp"
-#include "nav/frames.hpp"
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 
 namespace telemetry {
 
+const char* TelemetryEncoder::header() noexcept {
+    return "TEAM_ID,TIME_STAMPING_S,PACKET_COUNT,ALTITUDE_M,PRESSURE_PA,TEMP_C,VOLTAGE_V,"
+           "GNSS_TIME_S,GNSS_LATITUDE,GNSS_LONGITUDE,GNSS_ALTITUDE_M,GNSS_SATS,"
+           "ACC_X_MPS2,ACC_Y_MPS2,ACC_Z_MPS2,ROLL_DEG,PITCH_DEG,GYRO_SPIN_RATE_DPS,"
+           "FLIGHT_SOFTWARE_STATE,HEADING_DEG,HUMIDITY_PCT,VOC_INDEX,NOX_INDEX";
+}
+
 int TelemetryEncoder::encode(const TelemetryFrame& f, char* out, size_t out_len) const noexcept {
     if (!out || out_len < 4) return 0;
-    char mission_time[16];
-    format_mission_time(f.mission_time_s, mission_time, sizeof(mission_time));
     int n = snprintf(out, out_len,
-        "%s,%u,%.2f,%.1f,%.1f,%.2f,"
-        "%s,%.6f,%.6f,%.2f,%d,"
-        "%.2f,%.2f,%.2f,%u,"
-        "%.1f,%d",
-        mission_time, (unsigned)f.packet_count, (double)f.altitude_m, (double)f.pressure_pa, (double)f.temperature_c, (double)f.voltage_v,
-        f.gnss_time_str, (double)f.latitude_deg, (double)f.longitude_deg, (double)f.gnss_alt_msl_m, f.satellites,
-        (double)f.tilt_x_deg, (double)f.tilt_y_deg, (double)f.tilt_z_deg, (unsigned)f.software_state,
-        (double)f.cc1101_freq_mhz, (int)f.cc1101_rssi_dbm
-    );
+        "%s,%.1f,%lu,%.1f,%.0f,%.1f,%.2f,"
+        "%.0f,%.6f,%.6f,%.1f,%d,"
+        "%.2f,%.2f,%.2f,%.1f,%.1f,%.1f,%s,"
+        "%.1f,%.1f,%u,%u",
+        nav::TEAM_ID_STR, f.time_s, (unsigned long)f.packet_count, (double)f.altitude_m,
+        (double)f.pressure_pa, (double)f.temperature_c, (double)f.voltage_v,
+        f.gnss_time_s, f.latitude_deg, f.longitude_deg, f.gnss_alt_msl_m, f.satellites,
+        (double)f.acc_x, (double)f.acc_y, (double)f.acc_z, (double)f.roll_deg, (double)f.pitch_deg,
+        (double)f.spin_rate_dps, f.state ? f.state : "BOOT",
+        (double)f.heading_deg, (double)f.humidity_pct, (unsigned)f.voc_index, (unsigned)f.nox_index);
     if (n < 0 || (size_t)n >= out_len) { out[out_len - 1] = '\0'; return (int)out_len - 1; }
     return n;
 }
 
 TelemetryFrame TelemetryEncoder::make_frame(
-        const nav::FlightComputerOutput& fc,
-        const drivers::BaroData&         baro,
-        const drivers::GNSSData&         gnss,
-        const drivers::IMUData&          imu,
-        const drivers::PowerData&        pwr,
-        uint32_t freq_hz, int8_t rssi,
-        uint32_t packet_count,
-        uint32_t mission_time_s) noexcept {
+        const char* state, float alt_est_m,
+        const drivers::BaroData& baro, const drivers::GNSSData& gnss,
+        const drivers::IMUData& imu, const drivers::PowerData& pwr,
+        float humidity_pct, uint16_t voc_index, uint16_t nox_index,
+        uint32_t packet_count, double time_s) noexcept {
     TelemetryFrame f{};
-    f.packet_count = packet_count; f.mission_time_s = mission_time_s; f.software_state = fc.sup.state_code;
-    f.altitude_m = baro.valid ? (float)baro.altitude_agl_m : (float)fc.imm.nav.p(2);
-    f.pressure_pa = baro.valid ? (float)baro.pressure_pa : 101325.0f;
-    f.temperature_c = baro.valid ? (float)baro.temperature_c : 25.0f;
-    f.voltage_v = pwr.valid ? (float)pwr.voltage_v : 0.0f;
-    f.satellites = gnss.satellites;
-    if (gnss.time_str[0] != '\0') {
-        snprintf(f.gnss_time_str, sizeof(f.gnss_time_str), "%s", gnss.time_str);
-    } else {
-        snprintf(f.gnss_time_str, sizeof(f.gnss_time_str), "00:00:00");
-    }
-
+    f.time_s        = time_s;
+    f.packet_count  = packet_count;
+    f.state         = state;
+    f.altitude_m    = alt_est_m;                         // relative to the pad (mission AGL)
+    f.pressure_pa   = baro.valid ? (float)baro.pressure_pa : 0.0f;
+    f.temperature_c = baro.valid ? (float)baro.temperature_c : 0.0f;
+    f.voltage_v     = pwr.valid ? (float)pwr.voltage_v : 0.0f;
+    f.gnss_time_s   = gnss.gnss_time_s;
+    f.satellites    = gnss.satellites;
     if (gnss.valid || gnss.lat_deg != 0.0 || gnss.lon_deg != 0.0) {
-        f.latitude_deg = gnss.lat_deg;
-        f.longitude_deg = gnss.lon_deg;
-        f.gnss_alt_msl_m = gnss.alt_msl_m;
-    } else {
-        f.latitude_deg = 0.0;
-        f.longitude_deg = 0.0;
-        f.gnss_alt_msl_m = 0.0;
+        f.latitude_deg = gnss.lat_deg; f.longitude_deg = gnss.lon_deg; f.gnss_alt_msl_m = gnss.alt_msl_m;
     }
-    double q_norm_sq = fc.imm.nav.q(0)*fc.imm.nav.q(0) + fc.imm.nav.q(1)*fc.imm.nav.q(1) +
-                        fc.imm.nav.q(2)*fc.imm.nav.q(2) + fc.imm.nav.q(3)*fc.imm.nav.q(3);
-    if (imu.euler_valid) {
-        f.tilt_x_deg = (float)imu.euler_pitch_deg;
-        f.tilt_y_deg = (float)imu.euler_roll_deg;
-        f.tilt_z_deg = (float)imu.euler_yaw_deg;
-    } else if (imu.valid) {
-        double ax = imu.acc_x;
-        double ay = imu.acc_y;
-        double az = imu.acc_z;
-        double pitch_deg = std::atan2(-ax, std::sqrt(ay * ay + az * az)) * (180.0 / nav::PI);
-        double roll_deg  = std::atan2(ay, az) * (180.0 / nav::PI);
-        double yaw_deg   = (double)(imu.gyr_z * 180.0 / nav::PI);
-
-        f.tilt_x_deg = (float)pitch_deg;
-        f.tilt_y_deg = (float)roll_deg;
-        f.tilt_z_deg = (float)yaw_deg;
-    } else if (fc.t_s > 0.0 && q_norm_sq > 0.5) {
-        nav::EulerAngles ea = nav::euler_from_quat(fc.imm.nav.q);
-        f.tilt_x_deg = (float)(ea.pitch_rad * 180.0 / nav::PI);
-        f.tilt_y_deg = (float)(ea.roll_rad  * 180.0 / nav::PI);
-        f.tilt_z_deg = (float)(ea.yaw_rad   * 180.0 / nav::PI);
-    } else {
-        f.tilt_x_deg = 0.0f;
-        f.tilt_y_deg = 0.0f;
-        f.tilt_z_deg = 0.0f;
+    if (imu.valid) {
+        f.acc_x = (float)imu.acc_x; f.acc_y = (float)imu.acc_y; f.acc_z = (float)imu.acc_z;
+        f.spin_rate_dps = (float)(imu.gyr_z * 180.0 / nav::PI);
     }
-    f.cc1101_freq_mhz = (float)freq_hz / 1.0e6f; f.cc1101_rssi_dbm = rssi;
+    if (imu.euler_valid) {                               // ZXY: tilt_x = pitch, tilt_y = roll
+        f.pitch_deg   = (float)imu.euler_pitch_deg;
+        f.roll_deg    = (float)imu.euler_roll_deg;
+        f.heading_deg = (float)imu.euler_yaw_deg;
+    }
+    f.humidity_pct = humidity_pct;
+    f.voc_index = voc_index; f.nox_index = nox_index;
     return f;
-}
-
-void TelemetryEncoder::format_mission_time(uint32_t seconds, char* buf, size_t len) noexcept {
-    uint32_t h = seconds / 3600, m = (seconds % 3600) / 60, s = seconds % 60;
-    snprintf(buf, len, "%02u:%02u:%02u", (unsigned)h, (unsigned)m, (unsigned)s);
 }
 
 } // namespace telemetry
